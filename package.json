@@ -1,0 +1,48 @@
+{
+  "name": "@metehankurucu/revcat",
+  "version": "0.1.0",
+  "description": "RevenueCat CLI for AI agents - analytics, MRR tracking, and subscription management",
+  "type": "module",
+  "bin": {
+    "revcat": "./bin/revcat.ts"
+  },
+  "main": "./src/index.ts",
+  "files": [
+    "src",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "bun run bin/revcat.ts",
+    "test": "bun test",
+    "prepublishOnly": "bun test"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "revenuecat",
+    "cli",
+    "ai",
+    "subscriptions",
+    "analytics",
+    "mrr",
+    "revenue",
+    "ai-agent",
+    "subscription-management"
+  ],
+  "author": "metehankurucu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/metehankurucu/revcat"
+  },
+  "homepage": "https://github.com/metehankurucu/revcat#readme",
+  "license": "MIT"
+}

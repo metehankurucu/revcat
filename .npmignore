@@ -1,0 +1,9 @@
+tests/
+skills/
+plugin-redoc-0.yaml
+*.skill
+*.tgz
+.claude/
+.gitignore
+tsconfig.json
+bun.lock
