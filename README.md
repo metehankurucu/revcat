@@ -14,6 +14,16 @@ bun install -g @metehankurucu/revcat
 bunx @metehankurucu/revcat --help
 ```
 
+## AI Agent Skill
+
+Install the revcat skill to teach your AI agent how to use the CLI:
+
+```bash
+npx skills add metehankurucu/revcat
+```
+
+Once installed, your AI agent will know all revcat commands, workflows, and best practices for RevenueCat analytics and management.
+
 ## Getting Your API Key
 
 1. Go to [RevenueCat Dashboard](https://app.revenuecat.com)
@@ -357,16 +367,6 @@ bunx tsc --noEmit
 # Run CLI locally
 bun run bin/revcat.ts --help
 ```
-
-## AI Agent Skill
-
-Install the revcat skill to teach your AI agent how to use the CLI:
-
-```bash
-npx skills add metehankurucu/revcat
-```
-
-Once installed, your AI agent will know all revcat commands, workflows, and best practices for RevenueCat analytics and management.
 
 ## Disclaimer
 
