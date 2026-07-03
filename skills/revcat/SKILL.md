@@ -26,6 +26,10 @@ revcat <resource> <action> --project <id> [options]
 
 All commands require `--project` (or `REVENUECAT_PROJECT_ID` env var) except `projects list`.
 
+Global options: `--api-key <key>`, `--compact` (single-line JSON; default pretty).
+
+Pagination: any list/search command that takes `--limit` also takes `--starting-after <cursor>` and `--all`. `--all` auto-follows every page (capped at 20, stderr warning if truncated) and returns one merged `items` array with `pages_fetched` and `truncated`.
+
 ## Core Workflows
 
 ### Revenue Analysis
@@ -40,10 +44,14 @@ revcat charts data --project proj123 --chart mrr --start 2025-01-01 --end 2025-1
 # Churn rate (weekly)
 revcat charts data --project proj123 --chart churn --start 2026-01-01 --end 2026-02-21 --resolution week
 
-# Available chart names: actives, arr, churn, mrr, mrr_movement, revenue, trials,
-# subscription_retention, initial_conversion, trial_conversion, realized_ltv_per_customer,
-# realized_ltv_per_paying_customer, refund_rate, new, store_top_products, store_top_countries,
-# non_subscription_revenue, non_subscription_transactions
+# Chart names (validated against the RevenueCat v2 spec; an unknown --chart is
+# rejected before any request with a JSON did_you_mean suggestion):
+#   actives, actives_movement, actives_new, arr, churn, cohort_explorer,
+#   conversion_to_paying, customers_new, initial_conversion, ltv_per_customer,
+#   ltv_per_paying_customer, mrr, mrr_movement, prediction_explorer, refund_rate,
+#   revenue, subscription_retention, subscription_status, trials, trials_movement,
+#   trials_new, customers_active, trial_conversion_rate, non-subscription_purchases
+# Pass --unsafe-chart to skip validation and send the value as-is.
 
 # Discover chart options (resolutions, segments, filters)
 revcat charts options --project proj123 --chart revenue
@@ -134,7 +142,7 @@ For full command details with all options, see [references/commands.md](referenc
 | `customer_information` | 480/min | customers, subscriptions, purchases |
 | `project_configuration` | 60/min | everything else |
 
-Requests auto-wait when rate limited.
+A per-domain token bucket paces requests proactively. If the API still returns `429` (or a retryable `5xx`), the client retries automatically up to 2 times, waiting the body's `backoff_ms`, then `Retry-After`, then a capped exponential backoff; each retry is announced on stderr as a JSON line. After exhaustion the final error is the standard JSON envelope with `retryable: true`.
 
 ## Safety
 
@@ -142,4 +150,4 @@ Strict allowlist — only permitted operations execute. **Blocked**: all DELETE,
 
 ## API Specification
 
-Full RevenueCat API v2 OpenAPI spec: see [references/api-spec.yaml](references/api-spec.yaml).
+The full RevenueCat API v2 OpenAPI spec is kept as a single canonical copy at the repository root (`api-spec.yaml`). See [references/api-spec.md](references/api-spec.md) for the pointer and refresh instructions.
