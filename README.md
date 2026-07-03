@@ -377,7 +377,7 @@ If the retries are exhausted, the final error is emitted as the standard JSON en
 # Install dependencies
 bun install
 
-# Run tests (294 tests, 1093 assertions)
+# Run tests (299 tests, 1106 assertions)
 bun test
 
 # Type check

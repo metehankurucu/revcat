@@ -1,9 +1,12 @@
 import { Command } from "commander";
 import { ChartsApi } from "../../api/charts.ts";
-import type { ChartName } from "../../types/charts.ts";
+import { CHART_NAMES, type ChartName } from "../../types/charts.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
 import { assertValidChart } from "../chart-validation.ts";
+
+// Derived from the canonical list so the help text can never drift from it.
+const CHART_HELP = `Chart name (validated). e.g. ${CHART_NAMES.slice(0, 6).join(", ")}, ... (${CHART_NAMES.length} total; run 'charts options' or see docs, or pass --unsafe-chart)`;
 
 export function registerChartsCommand(program: Command): void {
   const cmd = program
@@ -29,10 +32,7 @@ export function registerChartsCommand(program: Command): void {
   cmd
     .command("data")
     .description("Get chart data (mrr, revenue, churn, arr, trials, etc.)")
-    .requiredOption(
-      "--chart <name>",
-      "Chart name: actives, arr, churn, mrr, mrr_movement, revenue, trials, subscription_retention, etc."
-    )
+    .requiredOption("--chart <name>", CHART_HELP)
     .option("--start <date>", "Start date (ISO 8601, e.g. 2025-01-01)")
     .option("--end <date>", "End date (ISO 8601)")
     .option("--resolution <r>", "Resolution: day, week, month, quarter, year")
@@ -67,7 +67,7 @@ export function registerChartsCommand(program: Command): void {
   cmd
     .command("options")
     .description("Get available options for a chart (resolutions, segments, filters)")
-    .requiredOption("--chart <name>", "Chart name")
+    .requiredOption("--chart <name>", CHART_HELP)
     .option("--unsafe-chart", "Skip chart-name validation (pass the value through as-is)")
     .action(async function (this: Command) {
       try {
