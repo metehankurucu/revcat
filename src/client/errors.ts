@@ -28,18 +28,42 @@ export class RateLimitError extends RevenueCatError {
   }
 }
 
+/**
+ * The RevenueCat v2 error object as defined in the OpenAPI spec (`Error` schema).
+ * There is no `code` field in v2; the machine-actionable fields are
+ * `type`, `param`, `doc_url`, `retryable` and `backoff_ms`.
+ */
+export interface RevenueCatApiErrorBody {
+  object?: string;
+  type?: string;
+  param?: string | null;
+  doc_url?: string;
+  message: string;
+  retryable?: boolean;
+  backoff_ms?: number | null;
+}
+
 export class RevenueCatApiError extends RevenueCatError {
   readonly statusCode: number;
-  readonly apiError: { code: number; message: string; doc_url?: string };
+  readonly apiError: RevenueCatApiErrorBody;
+  readonly type?: string;
+  readonly param?: string | null;
+  readonly docUrl?: string;
+  readonly retryable: boolean;
+  readonly backoffMs?: number;
 
-  constructor(
-    statusCode: number,
-    apiError: { code: number; message: string; doc_url?: string }
-  ) {
-    super(`API Error ${statusCode}: ${apiError.message}`);
+  constructor(statusCode: number, apiError: RevenueCatApiErrorBody) {
+    super(
+      `API Error ${statusCode}${apiError.type ? ` (${apiError.type})` : ""}: ${apiError.message}`
+    );
     this.name = "RevenueCatApiError";
     this.statusCode = statusCode;
     this.apiError = apiError;
+    this.type = apiError.type;
+    this.param = apiError.param ?? undefined;
+    this.docUrl = apiError.doc_url;
+    this.retryable = apiError.retryable ?? false;
+    this.backoffMs = apiError.backoff_ms ?? undefined;
   }
 }
 

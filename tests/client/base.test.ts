@@ -340,10 +340,17 @@ describe("RevenueCatClient", () => {
       }
     });
 
-    it("should throw RevenueCatApiError on 400 response", async () => {
+    it("should throw RevenueCatApiError on 400 response (v2 schema)", async () => {
       mockFetch({
         status: 400,
-        body: { code: 7224, message: "Invalid parameter" },
+        body: {
+          object: "error",
+          type: "parameter_error",
+          param: "limit",
+          doc_url: "https://errors.rev.cat/parameter-error",
+          message: "Invalid parameter",
+          retryable: false,
+        },
       });
       const client = new RevenueCatClient({ apiKey: "sk_test" });
 
@@ -354,7 +361,8 @@ describe("RevenueCatClient", () => {
         expect(e).toBeInstanceOf(RevenueCatApiError);
         const err = e as RevenueCatApiError;
         expect(err.statusCode).toBe(400);
-        expect(err.apiError.code).toBe(7224);
+        expect(err.type).toBe("parameter_error");
+        expect(err.param).toBe("limit");
         expect(err.apiError.message).toBe("Invalid parameter");
       }
     });

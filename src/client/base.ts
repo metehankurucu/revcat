@@ -7,6 +7,7 @@ import {
   BlockedOperationError,
   RateLimitError,
   RevenueCatApiError,
+  type RevenueCatApiErrorBody,
 } from "./errors.ts";
 
 export interface RequestOptions {
@@ -14,13 +15,25 @@ export interface RequestOptions {
   body?: unknown;
 }
 
+export interface RevenueCatClientConfig {
+  apiKey: string;
+  /** Max automatic retries for retryable failures (429 / retryable 5xx). Default 2. */
+  maxRetries?: number;
+  /** Injectable sleep for deterministic tests. Defaults to real setTimeout. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
 export class RevenueCatClient {
   private apiKey: string;
   private baseUrl = "https://api.revenuecat.com/v2";
   private rateLimiter = new RateLimiter();
+  private maxRetries: number;
+  private sleep: (ms: number) => Promise<void>;
 
-  constructor(config: { apiKey: string }) {
+  constructor(config: RevenueCatClientConfig) {
     this.apiKey = config.apiKey;
+    this.maxRetries = config.maxRetries ?? 2;
+    this.sleep = config.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
   async request<T>(
@@ -62,13 +75,7 @@ export class RevenueCatClient {
     }
 
     if (!response.ok) {
-      let apiError: { code: number; message: string; doc_url?: string };
-      try {
-        apiError = (await response.json()) as { code: number; message: string; doc_url?: string };
-      } catch {
-        apiError = { code: response.status, message: response.statusText };
-      }
-      throw new RevenueCatApiError(response.status, apiError);
+      throw new RevenueCatApiError(response.status, await this.parseErrorBody(response));
     }
 
     const contentType = response.headers.get("content-type") || "";
@@ -78,6 +85,28 @@ export class RevenueCatClient {
 
     // For non-JSON responses (e.g., invoice file download)
     return (await response.text()) as unknown as T;
+  }
+
+  /**
+   * Parses an error response body into the v2 `Error` shape, tolerating
+   * non-JSON / malformed bodies by falling back to the HTTP status text.
+   */
+  private async parseErrorBody(response: Response): Promise<RevenueCatApiErrorBody> {
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = undefined;
+    }
+    const fallbackMessage = response.statusText || `HTTP ${response.status}`;
+    if (body && typeof body === "object") {
+      const b = body as Partial<RevenueCatApiErrorBody>;
+      return {
+        ...b,
+        message: typeof b.message === "string" && b.message.length > 0 ? b.message : fallbackMessage,
+      };
+    }
+    return { message: fallbackMessage };
   }
 
   private buildUrl(
