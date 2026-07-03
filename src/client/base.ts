@@ -25,7 +25,7 @@ export interface RevenueCatClientConfig {
 export class RevenueCatClient {
   private apiKey: string;
   private baseUrl = "https://api.revenuecat.com/v2";
-  private rateLimiter = new RateLimiter();
+  private rateLimiter: RateLimiter;
   private maxRetries: number;
   private sleep: (ms: number) => Promise<void>;
 
@@ -33,6 +33,8 @@ export class RevenueCatClient {
     this.apiKey = config.apiKey;
     this.maxRetries = config.maxRetries ?? 2;
     this.sleep = config.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    // Share the same sleep so a bucket-exhaustion wait is deterministic in tests.
+    this.rateLimiter = new RateLimiter(this.sleep);
   }
 
   async request<T>(
