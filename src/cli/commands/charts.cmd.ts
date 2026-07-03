@@ -3,6 +3,7 @@ import { ChartsApi } from "../../api/charts.ts";
 import type { ChartName } from "../../types/charts.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { assertValidChart } from "../chart-validation.ts";
 
 export function registerChartsCommand(program: Command): void {
   const cmd = program
@@ -39,11 +40,13 @@ export function registerChartsCommand(program: Command): void {
     .option("--segment <s>", "Segment dimension (use 'charts options' to discover)")
     .option("--filters <json>", "JSON array of filters")
     .option("--selectors <json>", "JSON object of selectors")
+    .option("--unsafe-chart", "Skip chart-name validation (pass the value through as-is)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
+        assertValidChart(opts.chart, opts.unsafeChart);
         const api = new ChartsApi(client);
         output(
           await api.getChartData(projectId, opts.chart as ChartName, {
@@ -65,12 +68,15 @@ export function registerChartsCommand(program: Command): void {
     .command("options")
     .description("Get available options for a chart (resolutions, segments, filters)")
     .requiredOption("--chart <name>", "Chart name")
+    .option("--unsafe-chart", "Skip chart-name validation (pass the value through as-is)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
+        assertValidChart(opts.chart, opts.unsafeChart);
         const api = new ChartsApi(client);
-        output(await api.getChartOptions(projectId, this.opts().chart as ChartName));
+        output(await api.getChartOptions(projectId, opts.chart as ChartName));
       } catch (e) {
         outputError(e);
       }

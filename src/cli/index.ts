@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadConfig } from "../utils/config.ts";
 import { RevenueCatClient } from "../client/base.ts";
+import { setCompactOutput } from "./formatter.ts";
 import { registerProjectsCommand } from "./commands/projects.cmd.ts";
 import { registerAppsCommand } from "./commands/apps.cmd.ts";
 import { registerChartsCommand } from "./commands/charts.cmd.ts";
@@ -26,8 +27,10 @@ export function createProgram(): Command {
     .description("RevenueCat CLI for AI agents - analytics, MRR tracking, and subscription management")
     .version("0.1.0")
     .option("--api-key <key>", "RevenueCat API v2 secret key")
+    .option("--compact", "Output single-line JSON instead of pretty-printed")
     .hook("preAction", (thisCommand) => {
       const opts = thisCommand.opts();
+      setCompactOutput(Boolean(opts.compact));
       const config = loadConfig({ apiKey: opts.apiKey });
       const client = new RevenueCatClient({ apiKey: config.apiKey });
       // Store on the program for subcommands to access

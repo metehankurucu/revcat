@@ -1,25 +1,40 @@
-export type ChartName =
-  | "actives"
-  | "actives_movement"
-  | "actives_new"
-  | "arr"
-  | "churn"
-  | "cohort_explorer"
-  | "conversion_to_paying"
-  | "customers_new"
-  | "ltv_per_customer"
-  | "ltv_per_paying_customer"
-  | "mrr"
-  | "mrr_movement"
-  | "refund_rate"
-  | "revenue"
-  | "subscription_retention"
-  | "subscription_status"
-  | "trials"
-  | "trials_movement"
-  | "trials_new"
-  | "customers_active"
-  | "trial_conversion_rate";
+/**
+ * Canonical list of valid `--chart` names.
+ *
+ * This is the ONE source of truth for chart validation, the `ChartName` type,
+ * and the docs. It is generated from the RevenueCat v2 OpenAPI spec's
+ * `chart_name` enum (`api-spec.yaml`) and pinned to it by
+ * `tests/charts/chart-names.test.ts`: refreshing the spec with a changed chart
+ * set fails that test until this array is updated to match.
+ */
+export const CHART_NAMES = [
+  "actives",
+  "actives_movement",
+  "actives_new",
+  "arr",
+  "churn",
+  "cohort_explorer",
+  "conversion_to_paying",
+  "customers_new",
+  "initial_conversion",
+  "ltv_per_customer",
+  "ltv_per_paying_customer",
+  "mrr",
+  "mrr_movement",
+  "prediction_explorer",
+  "refund_rate",
+  "revenue",
+  "subscription_retention",
+  "subscription_status",
+  "trials",
+  "trials_movement",
+  "trials_new",
+  "customers_active",
+  "trial_conversion_rate",
+  "non-subscription_purchases",
+] as const;
+
+export type ChartName = (typeof CHART_NAMES)[number];
 
 export type ChartResolution = "day" | "week" | "month" | "quarter" | "year";
 

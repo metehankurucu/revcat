@@ -41,18 +41,10 @@ tags:
       showReadOnly={true} showWriteOnly={true} />
   - name: Overview (v2)
     x-traitTag: true
-    description: >-
+    description: >
       <div class="theme-admonition theme-admonition-info alert alert--info">
         <div class="heading">New to RevenueCat?</div>
         <div>Welcome! If you're adding subscriptions or other in-app purchases to your app, the RevenueCat SDK will handle most of the heavy-lifting without the need to interact with this API directly. See our <a href="/docs/getting-started/quickstart">Quickstart</a> for more information on getting started with RevenueCat.</div>
-      </div>
-
-
-      <div class="theme-admonition theme-admonition-info alert alert--info">
-        <div class="heading">API v2 under development</div>
-        <div>
-          REST API v2 is currently under development and does not yet cover all use cases from API v1. For those missing use cases, please use v1 in the meantime.
-        </div>
       </div>
 
 
@@ -264,11 +256,11 @@ tags:
 
       | Customer Information | 480 |
 
-      | Charts & Metrics | 5 |
+      | Charts & Metrics | 25 |
 
       | Project Configuration | 60 |
 
-      | Virtual Currencies - Create Transaction | 480 |
+      | Virtual Currencies | 480 |
 
 
       Each endpoint belongs to one of these domains. The rate limit applies per
@@ -599,6 +591,16 @@ tags:
 
       Request is not able to be processed. Please refer to the `message` field
       for more information.
+
+
+      ### `entity_references_archived_entities`
+
+
+      The entity you are trying to make active references other entities that
+      are currently inactive (archived). The `referenced_object_ids` field
+      contains the IDs of the inactive entities that need to be made active
+      before the operation can succeed. Make those entities active first, then
+      retry the request.
   - name: Representation of Subscriptions
     x-traitTag: true
     description: >-
@@ -751,6 +753,97 @@ tags:
 
       ![](/docs/images/api-v2/b3134c1-Family_shared_subscriptions__regranted.png)
 paths:
+  /projects/{project_id}/media_assets:
+    post:
+      summary: Upload a media asset
+      operationId: create-media-asset
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:offerings:read_write
+      x-release-status: public
+      tags:
+        - Paywall
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - filename
+                - content_type
+                - file_data_base64
+              properties:
+                filename:
+                  description: File name for the uploaded image.
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                  example: hero.webp
+                content_type:
+                  description: MIME type for the uploaded image.
+                  type: string
+                  enum:
+                    - image/jpeg
+                    - image/png
+                    - image/avif
+                    - image/heic
+                    - image/heif
+                    - image/webp
+                  example: image/webp
+                file_data_base64:
+                  description: Base64-encoded image bytes.
+                  type: string
+                  minLength: 1
+                  maxLength: 2796204
+                  example: UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA
+      responses:
+        '201':
+          description: Success. The media asset was uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAsset'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        This endpoint requires the following permission(s):
+        <code>project_configuration:offerings:read_write</code>. This endpoint
+        belongs to the <strong>Project Configuration</strong> domain, which has
+        a default rate limit of <strong>60 requests per minute</strong>.
   /projects/{project_id}/paywalls:
     get:
       summary: Get a list of paywalls
@@ -856,18 +949,27 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - offering_id
-              properties:
-                offering_id:
-                  description: |
-                    The ID of the offering the paywall will be created for.
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-                  example: ofrng123456789a
-              additionalProperties: false
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - offering_id
+                  properties:
+                    offering_id:
+                      description: |
+                        The ID of the offering the paywall will be created for.
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                      example: ofrng123456789a
+                    automatically_scale_font_size:
+                      description: >-
+                        Whether font sizes should automatically scale for this
+                        paywall. Defaults to true.
+                      type: boolean
+                      default: true
+                      example: true
+                - $ref: '#/components/schemas/PaywallDraftCreate'
       responses:
         '201':
           description: Success. The paywall was created
@@ -900,8 +1002,9 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/InternalError'
-      description: |-
-        Create a paywall for an offering of the project.
+      description: >-
+        Create a paywall draft for a project. You can either use the offering
+        template shortcut or provide full draft components directly.
          This endpoint requires the following permission(s): <code>project_configuration:offerings:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
   /projects/{project_id}/paywalls/{paywall_id}:
     get:
@@ -983,6 +1086,126 @@ paths:
         <code>project_configuration:offerings:read</code>. This endpoint belongs
         to the <strong>Project Configuration</strong> domain, which has a
         default rate limit of <strong>60 requests per minute</strong>.
+    patch:
+      summary: Update a paywall draft
+      operationId: update-paywall
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:offerings:read_write
+      x-release-status: public
+      tags:
+        - Paywall
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: paywall_id
+          description: ID of the paywall
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: pwXXXXXXXXXXXXXX
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - revision
+                - components_config
+                - components_localizations
+                - default_locale
+              properties:
+                revision:
+                  description: The current draft revision. Used to reject stale writes.
+                  type: integer
+                  example: 1
+                components_config:
+                  description: >-
+                    The raw paywall components configuration to save as the
+                    draft.
+                  type: object
+                  additionalProperties: true
+                  example:
+                    base:
+                      stack:
+                        id: main_stack
+                        type: stack
+                        components: []
+                components_localizations:
+                  description: Localized component values keyed by locale.
+                  type: object
+                  additionalProperties:
+                    type: object
+                    additionalProperties: true
+                  example:
+                    en_US:
+                      title: Premium
+                default_locale:
+                  description: The default locale for this paywall.
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                  example: en_US
+                name:
+                  description: Optional paywall name.
+                  type: string
+                  nullable: true
+                  minLength: 1
+                  maxLength: 255
+                  example: Main Paywall
+                automatically_scale_font_size:
+                  description: >-
+                    Whether font sizes should automatically scale for this
+                    paywall draft.
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Success. The paywall draft was updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paywall'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        Update a paywall draft. If the paywall is already published, this
+        updates its draft version without changing the published version.
+         This endpoint requires the following permission(s): <code>project_configuration:offerings:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
     delete:
       summary: Delete a paywall
       operationId: delete-paywall
@@ -1047,9 +1270,97 @@ paths:
         <code>project_configuration:offerings:read_write</code>. This endpoint
         belongs to the <strong>Project Configuration</strong> domain, which has
         a default rate limit of <strong>60 requests per minute</strong>.
+  /projects/{project_id}/paywalls/{paywall_id}/versions:
+    post:
+      summary: Create a paywall version
+      operationId: create-paywall-version
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:offerings:read_write
+      x-release-status: public
+      tags:
+        - Paywall
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: paywall_id
+          description: ID of the paywall
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: pwXXXXXXXXXXXXXX
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - name
+              properties:
+                name:
+                  description: A human-readable name for the paywall version snapshot.
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                  example: V2 Orange Accents
+      responses:
+        '201':
+          description: Success. The paywall version was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaywallVersion'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        This endpoint requires the following permission(s):
+        <code>project_configuration:offerings:read_write</code>. This endpoint
+        belongs to the <strong>Project Configuration</strong> domain, which has
+        a default rate limit of <strong>60 requests per minute</strong>.
   /projects/{project_id}/apps/{app_id}/public_api_keys:
     get:
       summary: Get a list of the public API keys of an app
+      description: >-
+        Returns public API keys for the app. RC Checkout public keys are
+        omitted. Sandbox keys are always included. Production keys are omitted
+        when the app uses Stripe or Web Billing and the linked Stripe connected
+        account is sandbox or test-only (same behavior as the RevenueCat
+        dashboard list).
+         This endpoint requires the following permission(s): <code>project_configuration:apps:read</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
       operationId: list-app-public-api-keys
       x-revenuecat-rate-limiting-domain: project_configuration
       x-scopes:
@@ -1102,11 +1413,6 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/InternalError'
-      description: >-
-        This endpoint requires the following permission(s):
-        <code>project_configuration:apps:read</code>. This endpoint belongs to
-        the <strong>Project Configuration</strong> domain, which has a default
-        rate limit of <strong>60 requests per minute</strong>.
   /projects:
     get:
       summary: Get a list of projects
@@ -1283,7 +1589,7 @@ paths:
         the <strong>Project Configuration</strong> domain, which has a default
         rate limit of <strong>60 requests per minute</strong>.
     post:
-      summary: Create an App
+      summary: Create an app
       operationId: create-app
       x-revenuecat-rate-limiting-domain: project_configuration
       x-scopes:
@@ -2332,6 +2638,21 @@ paths:
               $ref: '#/components/headers/RateLimitCurrentUsage'
             RevenueCat-Rate-Limit-Current-Limit:
               $ref: '#/components/headers/RateLimitCurrentLimit'
+        '202':
+          description: Accepted. The customer deletion was queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedObject'
+              example:
+                object: customer
+                id: b5b7bfd2-66fb-4091-af50-7c3cdccfdf24
+                deleted_at: 1658399423658
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2357,6 +2678,96 @@ paths:
         <code>customer_information:customers:read_write</code>. This endpoint
         belongs to the <strong>Customer Information</strong> domain, which has a
         default rate limit of <strong>480 requests per minute</strong>.
+  /projects/{project_id}/customers/{customer_id}/customer_center:
+    get:
+      summary: Get customer center configuration
+      operationId: get-customer-center-config
+      x-revenuecat-rate-limiting-domain: customer_information
+      x-scopes:
+        - customer_information:customers:read
+      x-release-status: public
+      tags:
+        - Customer
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: customer_id
+          in: path
+          description: ID of the customer
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1500
+            example: 19b8de26-77c1-49f1-aa18-019a391603e2
+        - name: platform
+          in: query
+          required: false
+          description: >
+            The platform to process the Customer Center configuration for. When
+            provided, returns the locale-selected, platform-filtered
+            configuration the customer would see. When omitted, returns the full
+            unprocessed configuration for all platforms. Must match a store
+            configured on this project.
+          schema:
+            type: string
+            enum:
+              - app_store
+              - play_store
+              - mac_app_store
+              - stripe
+              - amazon
+            example: app_store
+        - name: locale
+          in: query
+          required: false
+          description: >
+            BCP 47 locale string (e.g. en_US) used to select the appropriate
+            localization when platform is provided. When omitted, the
+            configuration's default locale is used. Has no effect if platform is
+            not provided.
+          schema:
+            type: string
+            example: en_US
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCenterConfig'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        This endpoint requires the following permission(s):
+        <code>customer_information:customers:read</code>. This endpoint belongs
+        to the <strong>Customer Information</strong> domain, which has a default
+        rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/actions/transfer:
     post:
       summary: >-
@@ -2458,9 +2869,14 @@ paths:
         default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/actions/grant_entitlement:
     post:
-      summary: >-
-        Grant an entitlement to a customer unless one already exists. As a side
-        effect, a promotional subscription is created.
+      summary: Grant an entitlement to a customer
+      description: >-
+        Grants an entitlement to a customer unless one already exists. As a side
+        effect, a promotional subscription is created. This endpoint requires
+        the following permission(s):
+        <code>customer_information:customers:read_write</code>. This endpoint
+        belongs to the <strong>Customer Information</strong> domain, which has a
+        default rate limit of <strong>480 requests per minute</strong>.
       operationId: grant-customer-entitlement
       x-revenuecat-rate-limiting-domain: customer_information
       x-scopes:
@@ -2544,17 +2960,16 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/InternalError'
+  /projects/{project_id}/customers/{customer_id}/actions/revoke_granted_entitlement:
+    post:
+      summary: Revoke a granted entitlement from a customer
       description: >-
-        This endpoint requires the following permission(s):
+        Revokes a granted entitlement from a customer. As a side effect, the
+        promotional subscription associated with the granted entitlement is
+        expired. This endpoint requires the following permission(s):
         <code>customer_information:customers:read_write</code>. This endpoint
         belongs to the <strong>Customer Information</strong> domain, which has a
         default rate limit of <strong>480 requests per minute</strong>.
-  /projects/{project_id}/customers/{customer_id}/actions/revoke_granted_entitlement:
-    post:
-      summary: >-
-        Revoke a granted entitlement from a customer. As a side effect, the
-        promotional subscription associated with the granted entitlement is
-        expired.
       operationId: revoke-customer-granted-entitlement
       x-revenuecat-rate-limiting-domain: customer_information
       x-scopes:
@@ -2631,11 +3046,6 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/InternalError'
-      description: >-
-        This endpoint requires the following permission(s):
-        <code>customer_information:customers:read_write</code>. This endpoint
-        belongs to the <strong>Customer Information</strong> domain, which has a
-        default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/actions/assign_offering:
     post:
       summary: Assign or clear an offering override for a customer
@@ -2718,6 +3128,88 @@ paths:
         <code>customer_information:customers:read_write</code>. This endpoint
         belongs to the <strong>Customer Information</strong> domain, which has a
         default rate limit of <strong>480 requests per minute</strong>.
+  /projects/{project_id}/customers/{customer_id}/actions/restore_purchase_by_order_id:
+    post:
+      summary: Restore a Google Play purchase by order ID
+      description: >-
+        Restores a Google Play purchase to the specified customer using a Google
+        Play order ID. This endpoint requires the following permission(s):
+        <code>customer_information:customers:read_write</code>. This endpoint
+        belongs to the <strong>Customer Information</strong> domain, which has a
+        default rate limit of <strong>480 requests per minute</strong>.
+      operationId: restore-purchase-by-order-id
+      x-revenuecat-rate-limiting-domain: customer_information
+      x-scopes:
+        - customer_information:customers:read_write
+      x-release-status: public
+      tags:
+        - Customer
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: customer_id
+          in: path
+          description: ID of the customer
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1500
+            example: 19b8de26-77c1-49f1-aa18-019a391603e2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - order_id
+              properties:
+                order_id:
+                  nullable: false
+                  type: string
+                  description: The Google Play order ID to restore.
+                  minLength: 1
+                  example: GPA.1234-5678-9012-34567
+      responses:
+        '200':
+          description: Purchase restored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/integrations/webhooks:
     get:
       summary: List webhook integrations
@@ -3122,6 +3614,93 @@ paths:
         <code>project_configuration:products:read</code>. This endpoint belongs
         to the <strong>Project Configuration</strong> domain, which has a
         default rate limit of <strong>60 requests per minute</strong>.
+    post:
+      summary: Update a product
+      operationId: update-product
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:products:read_write
+      x-release-status: public
+      tags:
+        - Product
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: product_id
+          description: ID of the product
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: prod1a2b3c4d5
+        - name: expand
+          in: query
+          description: |
+            Specifies which fields in the response should be expanded.
+          required: false
+          schema:
+            type: array
+            items:
+              maxLength: 5000
+              minLength: 1
+              type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  description: The display name of the product
+                  type: string
+                  maxLength: 1500
+              additionalProperties: false
+      responses:
+        '200':
+          description: Success. The product was updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        This endpoint requires the following permission(s):
+        <code>project_configuration:products:read_write</code>. This endpoint
+        belongs to the <strong>Project Configuration</strong> domain, which has
+        a default rate limit of <strong>60 requests per minute</strong>.
     delete:
       summary: Delete a product
       operationId: delete-product
@@ -3186,6 +3765,132 @@ paths:
         <code>project_configuration:products:read_write</code>. This endpoint
         belongs to the <strong>Project Configuration</strong> domain, which has
         a default rate limit of <strong>60 requests per minute</strong>.
+  /projects/{project_id}/products/{product_id}/actions/archive:
+    post:
+      summary: Archive a product
+      operationId: archive-product
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:products:read_write
+      x-release-status: public
+      description: |-
+        Archives a product (makes it inactive).
+         This endpoint requires the following permission(s): <code>project_configuration:products:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Product
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: product_id
+          description: ID of the product
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: prod1a2b3c4d5
+      responses:
+        '200':
+          description: Success. The product was archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /projects/{project_id}/products/{product_id}/actions/unarchive:
+    post:
+      summary: Unarchive a product
+      operationId: unarchive-product
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:products:read_write
+      x-release-status: public
+      description: |-
+        Unarchives a product (makes it active).
+         This endpoint requires the following permission(s): <code>project_configuration:products:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Product
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: product_id
+          description: ID of the product
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: prod1a2b3c4d5
+      responses:
+        '200':
+          description: Success. The product was unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/products/{product_id}/create_in_store:
     post:
       summary: Push a product to the store
@@ -3939,6 +4644,132 @@ paths:
         endpoint belongs to the <strong>Project Configuration</strong> domain,
         which has a default rate limit of <strong>60 requests per
         minute</strong>.
+  /projects/{project_id}/virtual_currencies/{virtual_currency_code}/actions/archive:
+    post:
+      summary: Archive a virtual currency
+      operationId: archive-virtual-currency
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:virtual_currencies:read_write
+      x-release-status: public
+      description: |-
+        Archives a virtual currency (makes it inactive).
+         This endpoint requires the following permission(s): <code>project_configuration:virtual_currencies:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Virtual Currency
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: virtual_currency_code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 10
+            pattern: ^[a-zA-Z0-9_]+$
+          description: The virtual currency code
+      responses:
+        '200':
+          description: Success. The virtual currency was archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCurrency'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /projects/{project_id}/virtual_currencies/{virtual_currency_code}/actions/unarchive:
+    post:
+      summary: Unarchive a virtual currency
+      operationId: unarchive-virtual-currency
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:virtual_currencies:read_write
+      x-release-status: public
+      description: |-
+        Unarchives a virtual currency (makes it active).
+         This endpoint requires the following permission(s): <code>project_configuration:virtual_currencies:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Virtual Currency
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: virtual_currency_code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 10
+            pattern: ^[a-zA-Z0-9_]+$
+          description: The virtual currency code
+      responses:
+        '200':
+          description: Success. The virtual currency was unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCurrency'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/entitlements/{entitlement_id}:
     get:
       summary: Get an entitlement
@@ -4398,6 +5229,132 @@ paths:
         <code>project_configuration:entitlements:read</code>. This endpoint
         belongs to the <strong>Project Configuration</strong> domain, which has
         a default rate limit of <strong>60 requests per minute</strong>.
+  /projects/{project_id}/entitlements/{entitlement_id}/actions/archive:
+    post:
+      summary: Archive an entitlement
+      operationId: archive-entitlement
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:entitlements:read_write
+      x-release-status: public
+      description: |-
+        Archives an entitlement (makes it inactive).
+         This endpoint requires the following permission(s): <code>project_configuration:entitlements:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Entitlement
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: entitlement_id
+          description: ID of the entitlement
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: entla1b2c3d4e5
+      responses:
+        '200':
+          description: Success. The entitlement was archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entitlement'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /projects/{project_id}/entitlements/{entitlement_id}/actions/unarchive:
+    post:
+      summary: Unarchive an entitlement
+      operationId: unarchive-entitlement
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:entitlements:read_write
+      x-release-status: public
+      description: |-
+        Unarchives an entitlement (makes it active).
+         This endpoint requires the following permission(s): <code>project_configuration:entitlements:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Entitlement
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: entitlement_id
+          description: ID of the entitlement
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: entla1b2c3d4e5
+      responses:
+        '200':
+          description: Success. The entitlement was unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entitlement'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/entitlements/{entitlement_id}/actions/attach_products:
     post:
       summary: Attach a set of products to an entitlement
@@ -4800,6 +5757,146 @@ paths:
         <code>project_configuration:offerings:read_write</code>. This endpoint
         belongs to the <strong>Project Configuration</strong> domain, which has
         a default rate limit of <strong>60 requests per minute</strong>.
+  /projects/{project_id}/offerings/{offering_id}/actions/archive:
+    post:
+      summary: Archive an offering
+      operationId: archive-offering
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:offerings:read_write
+      x-release-status: public
+      description: |-
+        Archives an offering (makes it inactive).
+         This endpoint requires the following permission(s): <code>project_configuration:offerings:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Offering
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: offering_id
+          description: ID of the offering
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: ofrnge1a2b3c4d5
+      responses:
+        '200':
+          description: Success. The offering was archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offering'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+  /projects/{project_id}/offerings/{offering_id}/actions/unarchive:
+    post:
+      summary: Unarchive an offering
+      operationId: unarchive-offering
+      x-revenuecat-rate-limiting-domain: project_configuration
+      x-scopes:
+        - project_configuration:offerings:read_write
+      x-release-status: public
+      description: |-
+        Unarchives an offering (makes it active).
+         This endpoint requires the following permission(s): <code>project_configuration:offerings:read_write</code>. This endpoint belongs to the <strong>Project Configuration</strong> domain, which has a default rate limit of <strong>60 requests per minute</strong>.
+      tags:
+        - Offering
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: offering_id
+          description: ID of the offering
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: ofrnge1a2b3c4d5
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unarchive_referenced_entities:
+                  description: >-
+                    If true, also unarchive any archived products referenced by
+                    this offering's packages.
+                  type: boolean
+                  default: false
+              additionalProperties: false
+      responses:
+        '200':
+          description: Success. The offering was unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offering'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/offerings:
     get:
       summary: Get a list of offerings
@@ -5717,6 +6814,41 @@ paths:
             minLength: 1
             maxLength: 255
             example: sub1a2b3c4d5e
+        - name: starting_after
+          in: query
+          required: false
+          schema:
+            type: string
+            example: ent12354
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 10
+            default: 20
+        - name: sort
+          description: Column to sort the result list by.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - id
+              - purchased_at
+            default: id
+            example: purchased_at
+        - name: direction
+          description: Sort direction for the result list.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: asc
+            example: desc
       responses:
         '200':
           description: Success
@@ -5752,9 +6884,9 @@ paths:
         default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/subscriptions/{subscription_id}/transactions/{transaction_id}/actions/refund:
     post:
-      summary: Refund a Play Store subscription's transaction
-      operationId: refund-play-store-subscription-transaction
-      x-revenuecat-rate-limiting-domain: customer_information
+      summary: Refund a Play Store or Galaxy subscription's transaction
+      operationId: refund-play-store-or-galaxy-subscription-transaction
+      x-revenuecat-rate-limiting-domain: subscriptions_refund_transaction
       x-scopes:
         - customer_information:subscriptions:read_write
       x-release-status: public
@@ -5820,9 +6952,13 @@ paths:
         '503':
           $ref: '#/components/responses/InternalError'
       description: >-
-        Refund a Play Store subscription's transaction. This endpoint does not
-        cancel the subscription or revoke access to it.
-         This endpoint requires the following permission(s): <code>customer_information:subscriptions:read_write</code>. This endpoint belongs to the <strong>Customer Information</strong> domain, which has a default rate limit of <strong>480 requests per minute</strong>.
+        Refund and cancel a Play Store or Galaxy subscription's transaction.
+        Access to the subscription will be revoked. This endpoint requires the
+        following permission(s):
+        <code>customer_information:subscriptions:read_write</code>. This
+        endpoint belongs to the <strong>Subscription Transactions
+        Refunds</strong> domain, which has a default rate limit of <strong>480
+        requests per minute</strong>.
   /projects/{project_id}/subscriptions/{subscription_id}/entitlements:
     get:
       summary: Get a list of entitlements associated with a subscription
@@ -5959,6 +7095,85 @@ paths:
         Cancel an active Web Billing subscription. The customer will lose access
         to the associated entitlements at the end of the current period.
          This endpoint requires the following permission(s): <code>customer_information:subscriptions:read_write</code>. This endpoint belongs to the <strong>Customer Information</strong> domain, which has a default rate limit of <strong>480 requests per minute</strong>.
+  /projects/{project_id}/subscriptions/{subscription_id}/actions/extend:
+    post:
+      summary: Extend the current billing period of a subscription
+      operationId: extend-subscription
+      x-revenuecat-rate-limiting-domain: customer_information
+      x-scopes:
+        - customer_information:subscriptions:read_write
+      x-release-status: public
+      x-revenuecat-release-gatekeeping: false
+      tags:
+        - Subscription
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: subscription_id
+          description: ID of the subscription
+          required: true
+          in: path
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: sub1a2b3c4d5e
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ExtendSubscriptionByDuration'
+                - $ref: '#/components/schemas/ExtendSubscriptionUntilDate'
+      responses:
+        '200':
+          description: >-
+            Success. The subscription's current billing period has been
+            extended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
+      description: >-
+        Extend the current billing period of a subscription. Provide either
+        `extend_by_days` to extend by a number of days, or `extend_until_ms` to
+        extend to an absolute epoch-millisecond timestamp. Supported on Apple
+        Store, Google Play Store, and Web Billing subscriptions. For Apple Store
+        subscriptions, `extend_reason_code` is required and the extension is
+        capped at 90 days.
+         This endpoint requires the following permission(s): <code>customer_information:subscriptions:read_write</code>. This endpoint belongs to the <strong>Customer Information</strong> domain, which has a default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/subscriptions/{subscription_id}/actions/refund:
     post:
       summary: Refund an active Web Billing subscription
@@ -6026,7 +7241,7 @@ paths:
          This endpoint requires the following permission(s): <code>customer_information:subscriptions:read_write</code>. This endpoint belongs to the <strong>Customer Information</strong> domain, which has a default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/subscriptions/{subscription_id}/authenticated_management_url:
     get:
-      summary: Get an authenticated Web Billing customer portal URL
+      summary: Get an authenticated subscription management URL
       operationId: get-authorized-subscription-management-url
       x-revenuecat-rate-limiting-domain: customer_information
       x-scopes:
@@ -6078,6 +7293,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
         '503':
           $ref: '#/components/responses/InternalError'
       description: >-
@@ -6597,7 +7814,7 @@ paths:
     get:
       summary: Get a list of customer's virtual currencies balances
       operationId: list-virtual-currencies-balances
-      x-revenuecat-rate-limiting-domain: customer_information
+      x-revenuecat-rate-limiting-domain: virtual_currencies
       x-scopes:
         - customer_information:purchases:read
       x-release-status: public
@@ -6671,13 +7888,13 @@ paths:
       description: >-
         This endpoint requires the following permission(s):
         <code>customer_information:purchases:read</code>. This endpoint belongs
-        to the <strong>Customer Information</strong> domain, which has a default
+        to the <strong>Virtual Currencies</strong> domain, which has a default
         rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/virtual_currencies/transactions:
     post:
       summary: Create a virtual currencies transaction
       operationId: create-virtual-currencies-transaction
-      x-revenuecat-rate-limiting-domain: virtual_currencies_create_transaction
+      x-revenuecat-rate-limiting-domain: virtual_currencies
       x-scopes:
         - customer_information:purchases:read_write
       x-release-status: public
@@ -6769,14 +7986,13 @@ paths:
       description: >-
         This endpoint requires the following permission(s):
         <code>customer_information:purchases:read_write</code>. This endpoint
-        belongs to the <strong>Virtual Currencies - Create Transaction</strong>
-        domain, which has a default rate limit of <strong>480 requests per
-        minute</strong>.
+        belongs to the <strong>Virtual Currencies</strong> domain, which has a
+        default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/virtual_currencies/update_balance:
     post:
       summary: Update a virtual currencies balance without creating a transaction
       operationId: update-virtual-currencies-balance
-      x-revenuecat-rate-limiting-domain: virtual_currencies_create_transaction
+      x-revenuecat-rate-limiting-domain: virtual_currencies
       x-scopes:
         - customer_information:purchases:read_write
       x-release-status: public
@@ -6868,9 +8084,8 @@ paths:
       description: >-
         This endpoint requires the following permission(s):
         <code>customer_information:purchases:read_write</code>. This endpoint
-        belongs to the <strong>Virtual Currencies - Create Transaction</strong>
-        domain, which has a default rate limit of <strong>480 requests per
-        minute</strong>.
+        belongs to the <strong>Virtual Currencies</strong> domain, which has a
+        default rate limit of <strong>480 requests per minute</strong>.
   /projects/{project_id}/customers/{customer_id}/attributes:
     get:
       summary: Get a list of the customer's attributes
@@ -7216,7 +8431,7 @@ paths:
             maxLength: 255
             example: proj1ab2c3d4
         - name: currency
-          description: ISO 4217 currency code
+          description: The currency to return metrics data in
           in: query
           schema:
             type: string
@@ -7233,6 +8448,8 @@ paths:
               - MXN
               - SEK
               - PLN
+              - NZD
+              - CHF
           example: EUR
       responses:
         '200':
@@ -7266,7 +8483,143 @@ paths:
         This endpoint requires the following permission(s):
         <code>charts_metrics:overview:read</code>. This endpoint belongs to the
         <strong>Charts & Metrics</strong> domain, which has a default rate limit
-        of <strong>5 requests per minute</strong>.
+        of <strong>25 requests per minute</strong>.
+  /projects/{project_id}/metrics/revenue:
+    get:
+      summary: Get revenue for a project
+      description: >-
+        Returns the total revenue for the project across all of its apps for the
+
+        given inclusive date range `[start_date, end_date]`. The value is
+        expressed
+
+        in the project's primary currency unless `currency` is provided.
+
+
+        Use `revenue_type` to choose which revenue definition the `value`
+        represents:
+
+        gross `revenue` (default), `revenue_net_of_taxes`, or `proceeds` (net of
+        both
+
+        taxes and store commission — the amount the developer keeps).
+
+
+        This endpoint is backed by the same realtime (v3) revenue chart that
+        powers
+
+        the dashboard. It is intended for cases where an app needs an
+        authoritative
+
+        revenue total without inferring it from the transaction list.
+
+
+        Note that the most recent day in the range may be partial if it includes
+
+        today, since transactions for today are still arriving.
+         This endpoint requires the following permission(s): <code>charts_metrics:overview:read</code>. This endpoint belongs to the <strong>Charts & Metrics</strong> domain, which has a default rate limit of <strong>25 requests per minute</strong>.
+      operationId: get-revenue-metric
+      x-revenuecat-rate-limiting-domain: charts_metrics
+      x-scopes:
+        - charts_metrics:overview:read
+      x-release-status: public
+      tags:
+        - Charts & Metrics
+      parameters:
+        - name: project_id
+          description: ID of the project
+          required: true
+          in: path
+          schema:
+            type: string
+            maxLength: 255
+            example: proj1ab2c3d4
+        - name: start_date
+          description: Start date for the data range (ISO 8601 format)
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2024-01-01'
+        - name: end_date
+          description: End date for the data range (ISO 8601 format)
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2024-12-31'
+        - name: currency
+          description: The currency to return metrics data in
+          in: query
+          schema:
+            type: string
+            enum:
+              - USD
+              - EUR
+              - GBP
+              - AUD
+              - CAD
+              - JPY
+              - BRL
+              - KRW
+              - CNY
+              - MXN
+              - SEK
+              - PLN
+              - NZD
+              - CHF
+          example: EUR
+        - name: revenue_type
+          in: query
+          description: >
+            Which revenue definition to return as the metric value:
+
+            - `revenue`: gross revenue.
+
+            - `revenue_net_of_taxes`: revenue with taxes subtracted.
+
+            - `proceeds`: revenue net of both taxes and store commission (the
+            amount the
+              developer keeps).
+          required: false
+          schema:
+            type: string
+            enum:
+              - revenue
+              - revenue_net_of_taxes
+              - proceeds
+            default: revenue
+          example: proceeds
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueMetric'
+          headers:
+            RevenueCat-Rate-Limit-Current-Usage:
+              $ref: '#/components/headers/RateLimitCurrentUsage'
+            RevenueCat-Rate-Limit-Current-Limit:
+              $ref: '#/components/headers/RateLimitCurrentLimit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/InternalError'
   /projects/{project_id}/charts/{chart_name}:
     get:
       summary: Get chart data
@@ -7322,7 +8675,13 @@ paths:
         When `aggregate` is provided, `values` is returned as an empty array and
 
         `summary` includes only the requested aggregate operations.
-         This endpoint requires the following permission(s): <code>charts_metrics:charts:read</code>. This endpoint belongs to the <strong>Charts & Metrics</strong> domain, which has a default rate limit of <strong>5 requests per minute</strong>.
+
+
+        **Incomplete data**
+
+        For the most recent periods, data may be flagged as incomplete, and may
+        not be appropriate to use for analysis.
+         This endpoint requires the following permission(s): <code>charts_metrics:charts:read</code>. This endpoint belongs to the <strong>Charts & Metrics</strong> domain, which has a default rate limit of <strong>25 requests per minute</strong>.
       operationId: get-chart-data
       x-revenuecat-rate-limiting-domain: charts_metrics
       x-scopes:
@@ -7340,8 +8699,73 @@ paths:
             maxLength: 255
             example: proj1ab2c3d4
         - name: chart_name
-          description: |
-            Name of the chart to retrieve.
+          description: >
+            Name of the chart to retrieve:
+
+            - actives: Active (paying) subscriptions 
+
+            - actives_movement: Period-over-period delta of active (paying)
+            subscriptions
+
+            - actives_new: New paying subscriptions, including trial
+            conversions, resubscriptions, and product changes
+
+            - arr: Annual recurring revenue
+
+            - churn: Churn rate: active and expired subscriptions per period
+
+            - cohort_explorer: allows measuring the performance of various
+            cohort definitions over time for revenue, retained subscriptions,
+            and cohort LTV
+
+            - conversion_to_paying: Conversion of new customers to paying
+
+            - customers_new: Newly seen customers
+
+            - initial_conversion: Initial conversion of new customers to paying
+            within fixed windows (0, 3, 7, 14, 30 days, and unbounded)
+
+            - ltv_per_customer: Realized LTV per customer, also known as ARPU,
+            cohorted by first seen date
+
+            - ltv_per_paying_customer: Realized LTV per paying customer, also
+            known as ARPPU, cohorted by first seen date
+
+            - mrr: Monthly recurring revenue
+
+            - mrr_movement: Period-over-period delta of monthly recurring
+            revenue
+
+            - prediction_explorer: similar to cohort_explorer but including
+            future predictions
+
+            - refund_rate: transactions per period, refunds, refund rate
+
+            - revenue: revenue (gross, net of taxes, or proceeds net of taxes
+            and commissions) and number of transactions (subscriptions and
+            non-subscriptions) per period
+
+            - subscription_retention: Per-period retention of paying
+            subscriptions by duration
+
+            - subscription_status: Break down paying subscriptions, trials, MRR,
+            ARR, or revenue by whether the subscription is set to renew,
+            cancelled, or in billing recovery
+
+            - trials: Active trials
+
+            - trials_movement: Movement of active trials
+
+            - trials_new: New trials
+
+            - customers_active: Customers seen during the period (also known as
+            DAU/MAU/WAU/etc.)
+
+            - trial_conversion_rate: Number of trials started in a period and
+            ratio of them converting to paying
+
+            - non-subscription_purchases: Number of non-subscription purchases
+            per period
           required: true
           in: path
           schema:
@@ -7356,10 +8780,12 @@ paths:
               - cohort_explorer
               - conversion_to_paying
               - customers_new
+              - initial_conversion
               - ltv_per_customer
               - ltv_per_paying_customer
               - mrr
               - mrr_movement
+              - prediction_explorer
               - refund_rate
               - revenue
               - subscription_retention
@@ -7369,6 +8795,7 @@ paths:
               - trials_new
               - customers_active
               - trial_conversion_rate
+              - non-subscription_purchases
             example: revenue
         - name: realtime
           description: >-
@@ -7408,7 +8835,7 @@ paths:
                 - total
             example: average,total
         - name: currency
-          description: ISO 4217 currency code
+          description: The currency to return metrics data in
           in: query
           schema:
             type: string
@@ -7425,6 +8852,8 @@ paths:
               - MXN
               - SEK
               - PLN
+              - NZD
+              - CHF
           example: EUR
         - name: resolution
           description: >
@@ -7450,6 +8879,24 @@ paths:
             type: string
             format: date
             example: '2024-12-31'
+        - name: expand_periods
+          description: >-
+            Whether to expand the date range so the first period is complete
+            (e.g. snap a weekly range back to the start of the week). Defaults
+            to false, which only includes data from the exact start_date
+            provided. Period labels are always aligned to period boundaries:
+            with expand_periods=false and a mid-period start_date, the first
+            period only aggregates data from start_date onwards and is marked as
+            incomplete. Exception: charts of point-in-time (stock) metrics, such
+            as active subscriptions or MRR, ignore this parameter entirely.
+            Their values are snapshots measured exactly at each period boundary,
+            so the first data point is always measured at the start of the
+            period containing start_date (which can fall before start_date) and
+            is not marked as incomplete, since a snapshot cannot be partial.
+          in: query
+          schema:
+            type: boolean
+            default: false
         - name: segment
           description: |
             Segment the data by this dimension. Use the chart options endpoint
@@ -7458,6 +8905,29 @@ paths:
           schema:
             type: string
             example: country
+        - name: limit_num_segments
+          description: >
+            If set, limits the number of segments returned to the top N by
+            value.
+
+            All remaining segments are aggregated into an "Other" segment.
+
+            Only applies when a segment is specified.
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            example: 10
+        - name: include_annotations
+          in: query
+          required: false
+          description: >-
+            When true, includes chart annotations for the project in the
+            response, filtered to the chart's date window.
+          schema:
+            type: boolean
+            default: false
+            example: true
       responses:
         '200':
           description: Chart data retrieved successfully
@@ -7522,7 +8992,7 @@ paths:
         . This endpoint requires the following permission(s):
         <code>charts_metrics:charts:read</code>. This endpoint belongs to the
         <strong>Charts & Metrics</strong> domain, which has a default rate limit
-        of <strong>5 requests per minute</strong>.
+        of <strong>25 requests per minute</strong>.
       operationId: get-chart-options
       x-revenuecat-rate-limiting-domain: charts_metrics
       x-scopes:
@@ -7540,8 +9010,73 @@ paths:
             maxLength: 255
             example: proj1ab2c3d4
         - name: chart_name
-          description: |
-            Name of the chart to retrieve.
+          description: >
+            Name of the chart to retrieve:
+
+            - actives: Active (paying) subscriptions 
+
+            - actives_movement: Period-over-period delta of active (paying)
+            subscriptions
+
+            - actives_new: New paying subscriptions, including trial
+            conversions, resubscriptions, and product changes
+
+            - arr: Annual recurring revenue
+
+            - churn: Churn rate: active and expired subscriptions per period
+
+            - cohort_explorer: allows measuring the performance of various
+            cohort definitions over time for revenue, retained subscriptions,
+            and cohort LTV
+
+            - conversion_to_paying: Conversion of new customers to paying
+
+            - customers_new: Newly seen customers
+
+            - initial_conversion: Initial conversion of new customers to paying
+            within fixed windows (0, 3, 7, 14, 30 days, and unbounded)
+
+            - ltv_per_customer: Realized LTV per customer, also known as ARPU,
+            cohorted by first seen date
+
+            - ltv_per_paying_customer: Realized LTV per paying customer, also
+            known as ARPPU, cohorted by first seen date
+
+            - mrr: Monthly recurring revenue
+
+            - mrr_movement: Period-over-period delta of monthly recurring
+            revenue
+
+            - prediction_explorer: similar to cohort_explorer but including
+            future predictions
+
+            - refund_rate: transactions per period, refunds, refund rate
+
+            - revenue: revenue (gross, net of taxes, or proceeds net of taxes
+            and commissions) and number of transactions (subscriptions and
+            non-subscriptions) per period
+
+            - subscription_retention: Per-period retention of paying
+            subscriptions by duration
+
+            - subscription_status: Break down paying subscriptions, trials, MRR,
+            ARR, or revenue by whether the subscription is set to renew,
+            cancelled, or in billing recovery
+
+            - trials: Active trials
+
+            - trials_movement: Movement of active trials
+
+            - trials_new: New trials
+
+            - customers_active: Customers seen during the period (also known as
+            DAU/MAU/WAU/etc.)
+
+            - trial_conversion_rate: Number of trials started in a period and
+            ratio of them converting to paying
+
+            - non-subscription_purchases: Number of non-subscription purchases
+            per period
           required: true
           in: path
           schema:
@@ -7556,10 +9091,12 @@ paths:
               - cohort_explorer
               - conversion_to_paying
               - customers_new
+              - initial_conversion
               - ltv_per_customer
               - ltv_per_paying_customer
               - mrr
               - mrr_movement
+              - prediction_explorer
               - refund_rate
               - revenue
               - subscription_retention
@@ -7569,6 +9106,7 @@ paths:
               - trials_new
               - customers_active
               - trial_conversion_rate
+              - non-subscription_purchases
             example: revenue
         - name: realtime
           description: >-
@@ -7658,6 +9196,16 @@ paths:
             stripe:
               value: si_Rww1psqupbKxmt
               summary: Stripe
+        - name: include_scheduled
+          in: query
+          required: false
+          description: >-
+            When true, includes subscriptions scheduled to start in the future
+            in the response.
+          schema:
+            type: boolean
+            default: false
+            example: true
       responses:
         '200':
           description: Success
@@ -7795,13 +9343,62 @@ components:
   schemas:
     AmazonApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - amazon
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - amazon
+          example: amazon
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         amazon:
           description: Amazon type details
           type: object
           required:
             - package_name
           nullable: false
+          additionalProperties: true
           properties:
             package_name:
               description: The package name of the app
@@ -7809,6 +9406,7 @@ components:
               nullable: false
               minLength: 1
               maxLength: 256
+      additionalProperties: true
     AmazonAppCreate:
       type: object
       required:
@@ -7850,66 +9448,15 @@ components:
               description: Your Amazon Developer Identity Shared Key
               type: string
               nullable: false
+          additionalProperties: false
       additionalProperties: false
+    AmountMicros:
+      description: The price in micros. For example, USD 1 would be represented as 1000000
+      nullable: false
+      type: integer
+      example: For 99.99, the value should be 99990000
     App:
-      allOf:
-        - type: object
-          required:
-            - id
-            - name
-            - created_at
-            - type
-            - project_id
-            - object
-          properties:
-            object:
-              description: >-
-                String representing the object's type. Objects of the same type
-                share the same value.
-              enum:
-                - app
-              type: string
-            id:
-              description: The id of the app
-              nullable: false
-              type: string
-              minLength: 1
-              maxLength: 255
-              example: app1a2b3c4
-            name:
-              description: The name of the app
-              nullable: false
-              type: string
-              minLength: 1
-              maxLength: 255
-            created_at:
-              description: The date when the app was created in ms since epoch
-              nullable: false
-              type: integer
-              format: int64
-              example: 1658399423658
-            type:
-              description: The platform of the app
-              nullable: false
-              type: string
-              enum:
-                - amazon
-                - app_store
-                - mac_app_store
-                - play_store
-                - stripe
-                - rc_billing
-                - roku
-                - paddle
-                - test_store
-              example: app_store
-            project_id:
-              description: The id of the project
-              nullable: false
-              type: string
-              minLength: 1
-              maxLength: 255
-              example: proj1a2b3c4
+      oneOf:
         - $ref: '#/components/schemas/AmazonApp'
         - $ref: '#/components/schemas/AppStoreApp'
         - $ref: '#/components/schemas/MacAppStoreApp'
@@ -7918,7 +9465,19 @@ components:
         - $ref: '#/components/schemas/RCBillingApp'
         - $ref: '#/components/schemas/RokuApp'
         - $ref: '#/components/schemas/PaddleApp'
-      additionalProperties: true
+        - $ref: '#/components/schemas/TestStoreApp'
+      discriminator:
+        propertyName: type
+        mapping:
+          amazon: '#/components/schemas/AmazonApp'
+          app_store: '#/components/schemas/AppStoreApp'
+          mac_app_store: '#/components/schemas/MacAppStoreApp'
+          play_store: '#/components/schemas/PlayStoreApp'
+          stripe: '#/components/schemas/StripeApp'
+          rc_billing: '#/components/schemas/RCBillingApp'
+          roku: '#/components/schemas/RokuApp'
+          paddle: '#/components/schemas/PaddleApp'
+          test_store: '#/components/schemas/TestStoreApp'
     AppCreate:
       oneOf:
         - $ref: '#/components/schemas/AmazonAppCreate'
@@ -7942,13 +9501,64 @@ components:
           paddle: '#/components/schemas/PaddleAppCreate'
     AppStoreApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - app_store
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - app_store
+          example: app_store
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         app_store:
           description: App Store type details
           type: object
           required:
             - bundle_id
+            - app_store_connect_api_key_configured
+            - subscription_key_configured
           nullable: false
+          additionalProperties: true
           properties:
             bundle_id:
               description: The bundle ID of the app
@@ -7956,6 +9566,26 @@ components:
               nullable: false
               minLength: 1
               maxLength: 256
+            app_store_connect_api_key_configured:
+              description: Whether App Store Connect API key credentials are configured.
+              type: boolean
+              nullable: false
+              example: true
+            subscription_key_configured:
+              description: >-
+                Whether In-App Purchase subscription key credentials are
+                configured.
+              type: boolean
+              nullable: false
+              example: true
+            custom_url_scheme:
+              description: >-
+                The custom URL scheme for the app, derived from the app's public
+                ID.
+              type: string
+              nullable: false
+              example: rc-1a2b3c4
+      additionalProperties: true
     AppStoreAppCreate:
       type: object
       required:
@@ -8061,6 +9691,7 @@ components:
               minLength: 1
               maxLength: 20
               nullable: false
+          additionalProperties: false
       additionalProperties: false
     AuditLog:
       type: object
@@ -8113,6 +9744,7 @@ components:
             - user
             - system
             - api_key
+            - oauth_client
         actor_identifier:
           type: string
           description: Identifier of the actor that performed the action.
@@ -8143,15 +9775,58 @@ components:
           type: string
         management_url:
           description: >-
-            A secure, single-use URL that provides temporary access to the
-            customer portal for a specific customer. This URL can only be used
-            once and expires after use.
-          nullable: false
+            A secure URL that provides temporary access to the subscription
+            management portal. For RC Billing subscriptions, this is a
+            single-use magic link to the RevenueCat customer portal. For Paddle
+            subscriptions, this is a short-lived authenticated Paddle Customer
+            Portal URL when the API key has the Customer portal session (Write)
+            permission and Paddle returns the required management URLs;
+            otherwise a non-authenticated URL (customer signs in via email) or
+            `null` if no URL can be generated.
+          nullable: true
           type: string
-          minLength: 1
-          maxLength: 255
           example: >-
             https://billing.revenuecat.com/app1a2b3c4/sub1ab2c3d4e5?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+      additionalProperties: false
+    ChartAnnotation:
+      type: object
+      description: A chart annotation marking a significant event on charts.
+      required:
+        - object
+        - id
+        - description
+        - start_date
+        - end_date
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          type: string
+          enum:
+            - chart_annotation
+          example: chart_annotation
+        id:
+          description: The ID of the chart annotation.
+          type: string
+          example: chartannot1a2b3c
+        description:
+          description: Human-readable description of the event this annotation represents.
+          type: string
+          example: App version 2.0 released
+        start_date:
+          description: The start date of the annotated period (ISO 8601 date format).
+          type: string
+          format: date
+          example: '2024-01-15'
+        end_date:
+          description: >-
+            The end date of the annotated period (ISO 8601 date format), or null
+            if the annotation is a single-day event.
+          type: string
+          format: date
+          nullable: true
+          example: '2024-01-20'
       additionalProperties: false
     ChartData:
       type: object
@@ -8292,15 +9967,31 @@ components:
             segment:
               type: string
               nullable: true
+        annotations:
+          description: >-
+            Chart annotations for the project, filtered to the chart's date
+            window. Only present when include_annotations=true is passed in the
+            request.
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartAnnotation'
       additionalProperties: false
     ChartFilterOption:
       type: object
       description: A filter option for a chart
       required:
+        - object
         - id
         - display_name
         - options
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - chart_filter_option
+          type: string
         id:
           description: Unique identifier for the filter
           type: string
@@ -8332,6 +10023,7 @@ components:
                 description: Human-readable name for the option value
                 type: string
                 example: United States
+      additionalProperties: true
     ChartOptions:
       type: object
       description: Available options for filtering and segmenting a chart
@@ -8410,9 +10102,17 @@ components:
       type: object
       description: A segmentation option for a chart
       required:
+        - object
         - id
         - display_name
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - chart_segment_option
+          type: string
         id:
           description: Unique identifier for the segment option
           type: string
@@ -8426,6 +10126,7 @@ components:
           nullable: true
           type: string
           example: Geography
+      additionalProperties: true
     Collaborator:
       type: object
       required:
@@ -8461,9 +10162,19 @@ components:
           format: email
           example: john.doe@example.com
         role:
-          description: The role of the collaborator
+          description: >-
+            The role of the collaborator. The project owner is included in the
+            list with the role `owner`.
           nullable: false
           type: string
+          enum:
+            - owner
+            - admin
+            - read_only
+            - customer_support
+            - developer
+            - growth_specialist
+            - revenuecat
           example: admin
         accepted_at:
           description: >-
@@ -8815,6 +10526,7 @@ components:
           minLength: 1
           maxLength: 255
           example: app_1234567890abcdef
+      additionalProperties: false
     Currency:
       type: string
       description: ISO 4217 currency code
@@ -9198,6 +10910,30 @@ components:
         - $tenjinId
         - $deviceVersion
       example: $email
+    CustomerCenterConfig:
+      type: object
+      required:
+        - object
+        - customer_center
+      additionalProperties: false
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          type: string
+          enum:
+            - customer_center_config
+          example: customer_center_config
+        customer_center:
+          description: >
+            The Customer Center configuration. When no platform is specified,
+            contains the full configuration for all platforms and locales. When
+            a platform is specified, contains the processed configuration for
+            that platform and locale.
+          type: object
+          additionalProperties: true
+          example: {}
     CustomerEntitlement:
       type: object
       required:
@@ -9239,8 +10975,11 @@ components:
           description: The type of the deleted object
           enum:
             - app
+            - chart_annotation
             - customer
+            - discount
             - entitlement
+            - experiment
             - offering
             - package
             - paywall
@@ -9287,9 +11026,18 @@ components:
         - id
         - lookup_key
         - display_name
+        - state
         - created_at
         - object
       properties:
+        state:
+          description: Whether the entitlement is active or inactive (archived).
+          nullable: false
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
         object:
           description: >-
             String representing the object's type. Objects of the same type
@@ -9368,6 +11116,32 @@ components:
               type: string
               example: /v2/projects/proj1ab2c3d4/entitlements/entle1a2b3c4d5/products
       additionalProperties: false
+    EntityReferencesArchivedEntitiesError:
+      description: >-
+        Error returned when attempting to make an entity active, but that entity
+        references other entities that are currently inactive (archived). The
+        `referenced_object_ids` field lists the IDs of the inactive entities
+        that must be made active first.
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required:
+            - referenced_object_ids
+          properties:
+            type:
+              type: string
+              enum:
+                - entity_references_archived_entities
+            referenced_object_ids:
+              description: >-
+                The IDs of the archived (inactive) entities that need to be made
+                active before this operation can succeed.
+              type: array
+              items:
+                type: string
+              example:
+                - prodabcd1234
+                - prodwxyz5678
     Environment:
       type: string
       description: The store environment
@@ -9409,6 +11183,7 @@ components:
             - resource_locked_error
             - unprocessable_entity_error
             - invalid_request
+            - entity_references_archived_entities
           example: parameter_error
         param:
           description: >-
@@ -9439,6 +11214,17 @@ components:
           type: integer
           nullable: true
           example: null
+        referenced_object_ids:
+          description: >-
+            The IDs of related objects relevant to the error, such as the
+            archived entities that need to be made active before the operation
+            can succeed.
+          type: array
+          items:
+            type: string
+          example:
+            - prodabcd1234
+            - prodwxyz5678
       additionalProperties: false
     ExperimentEnrollment:
       type: object
@@ -9472,6 +11258,87 @@ components:
           maxLength: 1
           type: string
           example: a
+      additionalProperties: false
+    ExtendSubscriptionByDuration:
+      type: object
+      additionalProperties: false
+      required:
+        - extend_by_days
+      properties:
+        extend_by_days:
+          type: integer
+          minimum: 1
+          description: |
+            Number of days to extend the current billing period by.
+            For Apple Store subscriptions, the maximum allowed value is 90.
+          example: 14
+        extend_reason_code:
+          type: string
+          enum:
+            - undeclared
+            - customer_satisfaction
+            - other
+            - service_issue_or_outage
+          description: |
+            Reason for the extension. Required for Apple Store subscriptions;
+            ignored for Google Play and Web Billing subscriptions.
+          example: customer_satisfaction
+    ExtendSubscriptionUntilDate:
+      type: object
+      additionalProperties: false
+      required:
+        - extend_until_ms
+      properties:
+        extend_until_ms:
+          type: integer
+          format: int64
+          description: >
+            Absolute epoch timestamp (in milliseconds) to which the current
+            billing
+
+            period should be extended. Must be after the subscription's current
+
+            `current_period_ends_at`. For Apple Store subscriptions, the
+            resulting
+
+            extension cannot exceed 90 days.
+          example: 1735689600000
+        extend_reason_code:
+          type: string
+          enum:
+            - undeclared
+            - customer_satisfaction
+            - other
+            - service_issue_or_outage
+          description: |
+            Reason for the extension. Required for Apple Store subscriptions;
+            ignored for Google Play and Web Billing subscriptions.
+          example: customer_satisfaction
+    IndicativePrice:
+      type: object
+      nullable: true
+      description: >-
+        An indicative price for a product, in the default currency/country (USD
+        / US). Uses the same price source as the get-offering-prices endpoint.
+      required:
+        - object
+        - currency
+        - country
+        - amount_micros
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          type: string
+          enum:
+            - indicative_price
+        currency:
+          $ref: '#/components/schemas/Currency'
+        country:
+          $ref: '#/components/schemas/Country'
+        amount_micros:
+          $ref: '#/components/schemas/AmountMicros'
       additionalProperties: false
     Invoice:
       type: object
@@ -10313,13 +12180,62 @@ components:
       additionalProperties: false
     MacAppStoreApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - mac_app_store
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - mac_app_store
+          example: mac_app_store
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         mac_app_store:
           description: Legacy Mac App Store type details
           type: object
           required:
             - bundle_id
           nullable: false
+          additionalProperties: true
           properties:
             bundle_id:
               description: The bundle ID of the app
@@ -10327,6 +12243,14 @@ components:
               nullable: false
               minLength: 1
               maxLength: 256
+            custom_url_scheme:
+              description: >-
+                The custom URL scheme for the app, derived from the app's public
+                ID.
+              type: string
+              nullable: false
+              example: rc-1a2b3c4
+      additionalProperties: true
     MacAppStoreAppCreate:
       type: object
       required:
@@ -10372,6 +12296,145 @@ components:
               minLength: 32
               maxLength: 32
               nullable: false
+          additionalProperties: false
+      additionalProperties: false
+    MediaAsset:
+      type: object
+      required:
+        - object
+        - id
+        - object_name
+        - original_name
+        - original_size
+        - original_width
+        - original_height
+        - formats
+        - alt_text
+        - is_decorative
+        - asset_base_url
+        - asset_type
+        - video_metadata
+        - transcoding_status
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - media_asset
+          type: string
+          example: media_asset
+        id:
+          description: The ID of the media asset.
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: mediaasset123456789abcdef
+        object_name:
+          description: The storage object name for the original asset.
+          type: string
+          minLength: 1
+          maxLength: 5000
+          example: paywalls/originals/abc123.webp
+        original_name:
+          description: The uploaded file name.
+          type: string
+          minLength: 1
+          maxLength: 5000
+          example: hero.webp
+        original_size:
+          description: The original file size in kilobytes.
+          type: integer
+          format: int64
+          example: 12345
+        original_width:
+          description: The original image width in pixels.
+          type: integer
+          nullable: true
+          example: 1024
+        original_height:
+          description: The original image height in pixels.
+          type: integer
+          nullable: true
+          example: 1024
+        formats:
+          description: Rendered image formats keyed by format name.
+          type: object
+          nullable: true
+          additionalProperties:
+            $ref: '#/components/schemas/MediaAssetFormat'
+        alt_text:
+          description: Alt text for the asset.
+          type: string
+          nullable: true
+          maxLength: 1500
+          example: A dog looking at a phone
+        is_decorative:
+          description: Whether this asset is decorative.
+          type: boolean
+          example: false
+        asset_base_url:
+          description: The base URL where asset object names can be resolved.
+          type: string
+          nullable: true
+          maxLength: 5000
+          example: https://paywalls-assets.revenuecat.com
+        asset_type:
+          description: The media asset type.
+          type: string
+          enum:
+            - image
+            - video
+          example: image
+        video_metadata:
+          description: Video metadata, if this is a video asset.
+          type: object
+          nullable: true
+          additionalProperties: true
+        transcoding_status:
+          description: The video transcoding status, if this is a video asset.
+          type: string
+          nullable: true
+          example: null
+      additionalProperties: false
+    MediaAssetFormat:
+      type: object
+      required:
+        - object
+        - object_name
+        - size
+        - width
+        - height
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - media_asset_format
+          type: string
+          example: media_asset_format
+        object_name:
+          description: The storage object name for this rendered asset format.
+          type: string
+          minLength: 1
+          maxLength: 5000
+          example: paywalls/abc123.webp
+        size:
+          description: The file size in kilobytes.
+          type: integer
+          format: int64
+          example: 12345
+        width:
+          description: The image width in pixels.
+          type: integer
+          nullable: true
+          example: 1024
+        height:
+          description: The image height in pixels.
+          type: integer
+          nullable: true
+          example: 1024
       additionalProperties: false
     MonetaryAmount:
       type: object
@@ -10405,6 +12468,7 @@ components:
           nullable: false
           type: number
           example: 6.25
+      additionalProperties: true
     Offering:
       type: object
       required:
@@ -10412,10 +12476,22 @@ components:
         - lookup_key
         - display_name
         - is_current
+        - state
         - created_at
         - project_id
         - object
+        - paywall_id
       properties:
+        state:
+          description: >-
+            Whether the offering is active or inactive (archived). Inactive
+            offerings are not returned by the SDK.
+          nullable: false
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
         object:
           description: >-
             String representing the object's type. Objects of the same type
@@ -10462,6 +12538,15 @@ components:
           maxLength: 20
           type: string
           example: proj1ab2c3d4
+        paywall_id:
+          description: >-
+            ID of the v2-visible paywall attached to this offering, or null if
+            none.
+          nullable: true
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: pw12345abcde
         metadata:
           description: Custom metadata of the offering
           nullable: true
@@ -10521,6 +12606,7 @@ components:
           nullable: true
           description: Indicates whether the product is consumable or not.
           example: true
+      additionalProperties: true
     OverviewMetric:
       type: object
       required:
@@ -10597,6 +12683,7 @@ components:
       required:
         - metrics
         - object
+        - currency
       properties:
         object:
           description: >-
@@ -10610,6 +12697,29 @@ components:
           items:
             $ref: '#/components/schemas/OverviewMetric'
           type: array
+        currency:
+          description: >-
+            The currency that monetary metric values are expressed in. Defaults
+            to USD. When the request is authenticated with a developer JWT/OAuth
+            token and no `currency` query parameter is provided, this reflects
+            the developer's saved dashboard display currency.
+          type: string
+          enum:
+            - USD
+            - EUR
+            - GBP
+            - AUD
+            - CAD
+            - JPY
+            - BRL
+            - KRW
+            - CNY
+            - MXN
+            - SEK
+            - PLN
+            - NZD
+            - CHF
+          example: EUR
       additionalProperties: false
     Ownership:
       type: string
@@ -10714,6 +12824,7 @@ components:
         eligibility_criteria:
           $ref: '#/components/schemas/EligibilityCriteria'
           nullable: false
+      additionalProperties: true
     PackageProductIDAssociation:
       type: object
       required:
@@ -10728,13 +12839,63 @@ components:
         eligibility_criteria:
           $ref: '#/components/schemas/EligibilityCriteria'
           nullable: false
+      additionalProperties: false
     PaddleApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - paddle
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - paddle
+          example: paddle
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         paddle:
           description: Paddle Billing type details
           type: object
           nullable: false
+          additionalProperties: true
           properties:
             paddle_is_sandbox:
               description: Whether the app is tied to the sandbox environment.
@@ -10747,6 +12908,7 @@ components:
               nullable: true
               minLength: 50
               maxLength: 70
+      additionalProperties: true
     PaddleAppCreate:
       type: object
       required:
@@ -10789,6 +12951,7 @@ components:
               nullable: true
               type: boolean
               example: true
+          additionalProperties: false
       additionalProperties: false
     Paywall:
       type: object
@@ -10798,6 +12961,7 @@ components:
         - offering_id
         - created_at
         - published_at
+        - automatically_scale_font_size
         - object
       properties:
         object:
@@ -10823,7 +12987,7 @@ components:
           example: My Awesome Paywall
         offering_id:
           description: The ID of the offering the paywall is for.
-          nullable: false
+          nullable: true
           type: string
           minLength: 1
           maxLength: 255
@@ -10840,6 +13004,12 @@ components:
           type: integer
           format: int64
           example: 1658399423958
+        automatically_scale_font_size:
+          description: Whether font sizes should automatically scale for this paywall.
+          nullable: false
+          type: boolean
+          default: true
+          example: true
         offering:
           description: The offering associated with this paywall. Expandable.
           nullable: true
@@ -10881,6 +13051,7 @@ components:
         - components_config
         - default_locale
         - components_localizations
+        - automatically_scale_font_size
       properties:
         revision:
           description: The revision number of this version.
@@ -10920,6 +13091,11 @@ components:
           example:
             en_US:
               title: Premium
+        automatically_scale_font_size:
+          description: Whether font sizes should automatically scale for this paywall.
+          type: boolean
+          default: true
+          example: true
         fonts:
           description: >-
             Font objects used by the published paywall components. Only present
@@ -10931,15 +13107,194 @@ components:
             CustomFont:
               src: https://example.com/font.ttf
       additionalProperties: false
+    PaywallDraftCreate:
+      type: object
+      required:
+        - components_config
+        - components_localizations
+      properties:
+        offering_id:
+          description: >
+            The optional ID of the offering the paywall draft will be attached
+            to.
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+          example: ofrng123456789a
+        name:
+          description: Optional paywall name.
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+          example: Main Paywall
+        components_config:
+          description: The raw paywall components configuration to save as the draft.
+          type: object
+          additionalProperties: true
+          example:
+            base:
+              stack:
+                id: main_stack
+                type: stack
+                components: []
+        components_localizations:
+          description: Localized component values keyed by locale.
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+          example:
+            en_US:
+              title: Premium
+        default_locale:
+          description: The default locale for this paywall. Defaults to en_US.
+          type: string
+          minLength: 1
+          maxLength: 255
+          default: en_US
+          example: en_US
+        automatically_scale_font_size:
+          description: >-
+            Whether font sizes should automatically scale for this paywall.
+            Defaults to true.
+          type: boolean
+          default: true
+          example: true
+      additionalProperties: false
+    PaywallVersion:
+      type: object
+      required:
+        - id
+        - name
+        - revision
+        - created_at
+        - components_config
+        - components_localizations
+        - default_locale
+        - automatically_scale_font_size
+        - object
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - paywall_version
+          type: string
+        id:
+          description: The id of the paywall version.
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: pwv123456789abcdef
+        name:
+          description: The name of the paywall version.
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Before AI edit
+        revision:
+          description: The paywall revision captured by this version.
+          type: integer
+          example: 3
+        created_at:
+          description: The date the paywall version was created at in ms since epoch.
+          type: integer
+          format: int64
+          example: 1658399423658
+        components_config:
+          description: The raw paywall components configuration captured by this version.
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            base:
+              stack:
+                id: main_stack
+                type: stack
+                components: []
+        components_localizations:
+          description: Localized component values keyed by locale.
+          type: object
+          nullable: true
+          additionalProperties:
+            type: object
+            additionalProperties: true
+          example:
+            en_US:
+              title: Premium
+        default_locale:
+          description: The default locale captured by this version.
+          type: string
+          nullable: true
+          example: en_US
+        automatically_scale_font_size:
+          description: >-
+            Whether font sizes should automatically scale for this paywall
+            version.
+          type: boolean
+          example: true
+      additionalProperties: true
     PlayStoreApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - play_store
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - play_store
+          example: play_store
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         play_store:
           description: Play Store type details
           type: object
           required:
             - package_name
           nullable: false
+          additionalProperties: true
           properties:
             package_name:
               description: The package name of the app
@@ -10947,6 +13302,14 @@ components:
               nullable: false
               minLength: 1
               maxLength: 256
+            custom_url_scheme:
+              description: >-
+                The custom URL scheme for the app, derived from the app's public
+                ID.
+              type: string
+              nullable: false
+              example: rc-1a2b3c4
+      additionalProperties: true
     PlayStoreAppCreate:
       type: object
       required:
@@ -10986,6 +13349,7 @@ components:
               minLength: 1
               maxLength: 256
               nullable: false
+          additionalProperties: false
       additionalProperties: false
     Product:
       type: object
@@ -10993,11 +13357,20 @@ components:
         - id
         - store_identifier
         - type
+        - state
         - created_at
         - app_id
         - object
         - display_name
       properties:
+        state:
+          description: Whether the product is active or inactive (archived).
+          nullable: false
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
         object:
           description: >-
             String representing the object's type. Objects of the same type
@@ -11048,6 +13421,12 @@ components:
           description: The app associated with the product
           nullable: true
           $ref: '#/components/schemas/App'
+        indicative_price:
+          description: >-
+            The product's indicative price in the default currency/country (USD
+            / US). Null if no price is available. Only present when expanded.
+          nullable: true
+          $ref: '#/components/schemas/IndicativePrice'
         display_name:
           description: The display name of the product
           nullable: true
@@ -11208,6 +13587,7 @@ components:
               minLength: 1
               maxLength: 255
               nullable: false
+          additionalProperties: false
     PublicApiKey:
       type: object
       required:
@@ -11392,6 +13772,12 @@ components:
             - promotional
             - stripe
             - rc_billing
+            - external
+            - roku
+            - paddle
+            - paypal
+            - galaxy
+            - test_store
           example: amazon
         store_purchase_identifier:
           description: The store purchase identifier
@@ -11412,7 +13798,55 @@ components:
       additionalProperties: false
     RCBillingApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - rc_billing
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - rc_billing
+          example: rc_billing
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         rc_billing:
           description: Revenue Cat Billing Store type details
           type: object
@@ -11420,6 +13854,7 @@ components:
             - seller_company_name
             - default_currency
           nullable: false
+          additionalProperties: true
           properties:
             stripe_account_id:
               description: Stripe account connected to your RevenueCat account.
@@ -11429,7 +13864,7 @@ components:
               maxLength: 256
             seller_company_name:
               description: >-
-                The company name.  This field is deprecated. Please, use
+                The company name. This field is deprecated. Please, use
                 `app_name` instead.
               type: string
               nullable: false
@@ -11454,7 +13889,7 @@ components:
             support_email:
               description: >-
                 Used as the `reply to` address in all emails sent to customers,
-                to allow them to receive support. 
+                to allow them to receive support.
               type: string
               nullable: true
               minLength: 1
@@ -11462,6 +13897,7 @@ components:
             default_currency:
               description: The default currency to be used for the app.
               $ref: '#/components/schemas/RCBillingCurrency'
+      additionalProperties: true
     RCBillingAppCreate:
       type: object
       required:
@@ -11518,6 +13954,7 @@ components:
               maxLength: 320
             default_currency:
               $ref: '#/components/schemas/RCBillingCurrency'
+          additionalProperties: false
       additionalProperties: false
     RCBillingCurrency:
       type: string
@@ -11571,13 +14008,118 @@ components:
         - ZAR
         - TRY
         - UAH
+    RevenueMetric:
+      type: object
+      additionalProperties: false
+      required:
+        - object
+        - start_date
+        - end_date
+        - currency
+        - value
+        - revenue_type
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          type: string
+          enum:
+            - revenue_metric
+          example: revenue_metric
+        start_date:
+          description: Start date of the revenue range, inclusive (ISO 8601 format).
+          type: string
+          format: date
+          nullable: false
+          example: '2026-01-01'
+        end_date:
+          description: End date of the revenue range, inclusive (ISO 8601 format).
+          type: string
+          format: date
+          nullable: false
+          example: '2026-01-31'
+        currency:
+          description: The ISO 4217 currency code that the revenue value is expressed in.
+          type: string
+          nullable: false
+          example: USD
+        value:
+          description: >-
+            Revenue for the date range, expressed in `currency`, for the revenue
+            definition selected by the `revenue_type` request parameter.
+            Two-decimal precision.
+          type: number
+          nullable: false
+          example: 12345.67
+        revenue_type:
+          description: >-
+            The revenue definition that `value` represents: `revenue` (gross),
+            `revenue_net_of_taxes`, or `proceeds` (net of both taxes and store
+            commission). Matches the `revenue_type` request parameter.
+          type: string
+          enum:
+            - revenue
+            - revenue_net_of_taxes
+            - proceeds
+          nullable: false
+          example: proceeds
     RokuApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - roku
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - roku
+          example: roku
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         roku:
           description: Roku Channel Store type details
           type: object
           nullable: false
+          additionalProperties: true
           properties:
             roku_channel_id:
               description: Channel ID provided on the Roku Channel page.
@@ -11591,6 +14133,7 @@ components:
               nullable: true
               minLength: 1
               maxLength: 30
+      additionalProperties: true
     RokuAppCreate:
       type: object
       required:
@@ -11637,6 +14180,7 @@ components:
               nullable: true
               minLength: 1
               maxLength: 30
+          additionalProperties: false
       additionalProperties: false
     StoreKitConfigFile:
       type: object
@@ -11697,11 +14241,60 @@ components:
       additionalProperties: false
     StripeApp:
       type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+        - stripe
       properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - stripe
+          example: stripe
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
         stripe:
           description: Stripe type details
           type: object
           nullable: false
+          additionalProperties: true
           properties:
             stripe_account_id:
               description: Stripe account connected to your RevenueCat account.
@@ -11709,6 +14302,7 @@ components:
               nullable: true
               minLength: 1
               maxLength: 256
+      additionalProperties: true
     StripeAppCreate:
       type: object
       required:
@@ -11746,6 +14340,7 @@ components:
               minLength: 1
               maxLength: 256
               nullable: true
+          additionalProperties: false
       additionalProperties: false
     Subscription:
       type: object
@@ -11984,6 +14579,12 @@ components:
             - promotional
             - stripe
             - rc_billing
+            - external
+            - roku
+            - paddle
+            - paypal
+            - galaxy
+            - test_store
           example: amazon
         store_subscription_identifier:
           description: >-
@@ -12003,15 +14604,89 @@ components:
             - $ref: '#/components/schemas/Ownership'
         pending_changes:
           description: >-
-            Indicates pending product changes. Present if the
-            `auto_renewal_status` is `will_change_product`.
+            Expected changes to the subscription that will occur at the end of
+            the current period. Present when the subscription has a pending
+            product change, has already renewed for the next period, or has a
+            failed upcoming renewal. Only fields that differ from the current
+            subscription state are included.
           nullable: true
           type: object
+          additionalProperties: true
           properties:
             product:
               description: The product that will be active as of the next renewal
-              nullable: false
-              $ref: '#/components/schemas/Product'
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/Product'
+            current_period_starts_at:
+              description: >-
+                Expected start of the next billing period in ms since epoch.
+                Omitted when unchanged from the current subscription.
+              nullable: true
+              type: integer
+              format: int64
+              example: 1658399423658
+            current_period_ends_at:
+              description: >-
+                Expected end of the next billing period in ms since epoch.
+                Omitted when unchanged from the current subscription.
+              nullable: true
+              type: integer
+              format: int64
+              example: 1660991423658
+            store_subscription_identifier:
+              description: >-
+                Expected store subscription identifier for the next period.
+                Omitted when unchanged from the current subscription.
+              nullable: true
+              type: string
+              minLength: 1
+              maxLength: 255
+              example: 12345679
+            auto_renewal_status:
+              description: >-
+                Expected auto renewal status for the next period. Omitted when
+                unchanged from the current subscription.
+              nullable: true
+              type: string
+              enum:
+                - will_renew
+                - will_not_renew
+                - will_change_product
+                - will_pause
+                - requires_price_increase_consent
+                - has_already_renewed
+              example: will_renew
+            status:
+              description: >-
+                Expected subscription status for the next period. Omitted when
+                unchanged from the current subscription.
+              nullable: true
+              type: string
+              enum:
+                - trialing
+                - active
+                - expired
+                - in_grace_period
+                - in_billing_retry
+                - paused
+                - unknown
+                - incomplete
+              example: active
+            pending_payment:
+              description: >-
+                Expected pending payment flag for the next period. Omitted when
+                unchanged from the current subscription.
+              nullable: true
+              type: boolean
+              example: false
+            gives_access:
+              description: >-
+                Expected access flag for the next period. Omitted when unchanged
+                from the current subscription.
+              nullable: true
+              type: boolean
+              example: true
         country:
           $ref: '#/components/schemas/Country'
           description: Billing country in ISO alpha 2 code
@@ -12051,12 +14726,15 @@ components:
           nullable: true
           description: The duration of the subscription's trial period in ISO-8601 standard
           example: P1W
+      additionalProperties: true
     SubscriptionTransaction:
       type: object
       required:
         - id
         - purchased_at
+        - product_store_identifier
         - object
+      additionalProperties: false
       properties:
         object:
           description: >-
@@ -12085,6 +14763,18 @@ components:
           minLength: 1
           maxLength: 511
           example: com.example.product
+        revenue_in_local_currency:
+          description: >-
+            The revenue generated by the transaction in the customer's purchased
+            currency
+          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/MonetaryAmount'
+        revenue_in_usd:
+          description: The revenue generated by the transaction in USD
+          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/MonetaryAmount'
         expiration_date:
           description: The expiration date of the transaction in ms since epoch
           nullable: true
@@ -12099,7 +14789,57 @@ components:
           type: integer
           format: int64
           example: 1658399423658
-      additionalProperties: false
+    TestStoreApp:
+      type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - created_at
+        - project_id
+      properties:
+        object:
+          description: >-
+            String representing the object's type. Objects of the same type
+            share the same value.
+          enum:
+            - app
+          type: string
+        id:
+          description: The id of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: app1a2b3c4
+        name:
+          description: The name of the app
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+        created_at:
+          description: The date when the app was created in ms since epoch
+          nullable: false
+          type: integer
+          format: int64
+          example: 1658399423658
+        type:
+          description: The platform of the app
+          nullable: false
+          type: string
+          enum:
+            - test_store
+          example: test_store
+        project_id:
+          description: The id of the project
+          nullable: false
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: proj1a2b3c4
+      additionalProperties: true
     Transfer:
       type: object
       title: TransferResult
@@ -12113,6 +14853,7 @@ components:
         target_customer:
           description: The target customer after the transfer
           $ref: '#/components/schemas/Customer'
+      additionalProperties: true
     UpdateWebhookIntegrationInput:
       type: object
       properties:
@@ -12157,15 +14898,25 @@ components:
           minLength: 1
           maxLength: 255
           example: app_1234567890abcdef
+      additionalProperties: false
     VirtualCurrency:
       type: object
       required:
         - project_id
         - code
         - name
+        - state
         - created_at
         - object
       properties:
+        state:
+          description: Whether the virtual currency is active or inactive (archived).
+          nullable: false
+          type: string
+          enum:
+            - active
+            - inactive
+          example: active
         object:
           description: >-
             String representing the object's type. Objects of the same type
@@ -12316,6 +15067,7 @@ components:
           nullable: true
           type: boolean
           example: false
+      additionalProperties: false
     WebhookEventType:
       type: string
       description: The type of event that triggers the webhook
@@ -12418,6 +15170,12 @@ components:
           minLength: 1
           maxLength: 255
           example: app_1234567890abcdef
+        signing_secret:
+          description: >-
+            The plaintext HMAC signing secret. Only returned in the response to
+            a rotate request.
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
         created_at:
           description: >-
             The timestamp in ms since epoch when the webhook integration was
@@ -12450,6 +15208,26 @@ components:
         type: integer
       example: 10
   responses:
+    BadGateway:
+      description: Bad gateway
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  type:
+                    type: string
+                    enum:
+                      - server_error
+            example:
+              object: error
+              type: server_error
+              message: Upstream service returned an invalid response
+              retryable: true
+              doc_url: https://errors.rev.cat/server-error
+              backoff_ms: 1000
     BadRequest:
       description: Bad request
       content:
@@ -12494,6 +15272,7 @@ components:
                     enum:
                       - resource_already_exists
                       - idempotency_error
+                      - invalid_request
           examples:
             resource_already_exists:
               value:
@@ -12509,6 +15288,13 @@ components:
                 message: Idempotency key already used for a different request
                 retryable: false
                 doc_url: https://errors.rev.cat/idempotency-error
+            invalid_request:
+              value:
+                object: error
+                type: invalid_request
+                message: Request conflicts with the current resource state
+                retryable: false
+                doc_url: https://errors.rev.cat/invalid-request
     Forbidden:
       description: Access denied
       content:
@@ -12650,6 +15436,7 @@ components:
                       - unprocessable_entity_error
                       - parameter_error
                       - store_error
+                      - entity_references_archived_entities
           examples:
             unprocessable_entity:
               value:
@@ -12673,6 +15460,19 @@ components:
                 retryable: true
                 doc_url: https://errors.rev.cat/store-error
                 backoff_ms: 1000
+            entity_references_archived_entities:
+              value:
+                object: error
+                type: entity_references_archived_entities
+                message: >-
+                  This offering references inactive products. You will need to
+                  make the products active first before making the offering
+                  active.
+                retryable: false
+                doc_url: https://errors.rev.cat/entity-references-archived-entities
+                referenced_object_ids:
+                  - prodabcd1234
+                  - prodwxyz5678
 security:
   - BearerAuth: []
 servers:

@@ -73,3 +73,26 @@ export class ConfigError extends RevenueCatError {
     this.name = "ConfigError";
   }
 }
+
+/**
+ * Raised when `--chart` is not one of the spec-derived canonical chart names
+ * and `--unsafe-chart` was not passed. Carries machine-actionable did-you-mean
+ * suggestions and the full valid set so an agent can self-correct.
+ */
+export class InvalidChartError extends RevenueCatError {
+  readonly chart: string;
+  readonly suggestions: string[];
+  readonly validCharts: readonly string[];
+
+  constructor(chart: string, suggestions: string[], validCharts: readonly string[]) {
+    const hint = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+    super(
+      `Unknown chart "${chart}".${hint} Run "revcat charts options" for a valid chart, ` +
+        `see the docs for the full list, or pass --unsafe-chart to bypass validation.`
+    );
+    this.name = "InvalidChartError";
+    this.chart = chart;
+    this.suggestions = suggestions;
+    this.validCharts = validCharts;
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, spyOn, afterEach } from "bun:test";
 import { output, outputError } from "../../src/cli/formatter.ts";
-import { RevenueCatApiError } from "../../src/client/errors.ts";
+import { RevenueCatApiError, InvalidChartError } from "../../src/client/errors.ts";
 
 // R1: outputError must serialize the machine-actionable v2 fields
 // (type, param, doc_url, retryable, status) into the JSON envelope when present.
@@ -101,5 +101,16 @@ describe("R1: outputError envelope", () => {
     const line = logSpy.mock.calls[logSpy.mock.calls.length - 1][0] as string;
     expect(line).toContain("\n");
     logSpy.mockRestore();
+  });
+
+  it("should serialize did_you_mean and valid_charts for an InvalidChartError", () => {
+    const err = new InvalidChartError("mmr", ["mrr", "arr"], ["mrr", "arr", "revenue"]);
+    const envelope = captureError(() => outputError(err)) as Record<string, unknown>;
+
+    expect(envelope.error).toBe("InvalidChartError");
+    expect(envelope.chart).toBe("mmr");
+    expect(envelope.did_you_mean).toEqual(["mrr", "arr"]);
+    expect(envelope.valid_charts).toContain("revenue");
+    expect(String(envelope.message)).toContain("Did you mean: mrr");
   });
 });
