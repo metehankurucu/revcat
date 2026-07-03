@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { PaywallsApi } from "../../api/paywalls.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerPaywallsCommand(program: Command): void {
   const cmd = program
@@ -13,6 +14,8 @@ export function registerPaywallsCommand(program: Command): void {
     .command("list")
     .description("List paywalls")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .option("--expand <fields>", "Expand fields (e.g. items.offering)")
     .action(async function (this: Command) {
       try {
@@ -20,7 +23,7 @@ export function registerPaywallsCommand(program: Command): void {
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new PaywallsApi(client);
-        output(await api.list(projectId, { limit: opts.limit, expand: opts.expand }));
+        await outputList(opts, (p) => api.list(projectId, { ...p, expand: opts.expand }));
       } catch (e) {
         outputError(e);
       }

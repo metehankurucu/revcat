@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { EntitlementsApi } from "../../api/entitlements.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerEntitlementsCommand(program: Command): void {
   const cmd = program
@@ -13,12 +14,15 @@ export function registerEntitlementsCommand(program: Command): void {
     .command("list")
     .description("List entitlements")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new EntitlementsApi(client);
-        output(await api.list(projectId, this.opts()));
+        await outputList(opts, (p) => api.list(projectId, p));
       } catch (e) {
         outputError(e);
       }
@@ -43,12 +47,16 @@ export function registerEntitlementsCommand(program: Command): void {
     .command("products")
     .description("List products attached to an entitlement")
     .requiredOption("--entitlement <id>", "Entitlement ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new EntitlementsApi(client);
-        output(await api.listProducts(projectId, this.opts().entitlement));
+        await outputList(opts, (p) => api.listProducts(projectId, opts.entitlement, p));
       } catch (e) {
         outputError(e);
       }

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { PackagesApi } from "../../api/packages.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerPackagesCommand(program: Command): void {
   const cmd = program
@@ -14,13 +15,15 @@ export function registerPackagesCommand(program: Command): void {
     .description("List packages in an offering")
     .requiredOption("--offering <id>", "Offering ID")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new PackagesApi(client);
-        output(await api.list(projectId, opts.offering, { limit: opts.limit }));
+        await outputList(opts, (p) => api.list(projectId, opts.offering, p));
       } catch (e) {
         outputError(e);
       }
@@ -45,12 +48,16 @@ export function registerPackagesCommand(program: Command): void {
     .command("products")
     .description("List products in a package")
     .requiredOption("--package <id>", "Package ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new PackagesApi(client);
-        output(await api.listProducts(projectId, this.opts().package));
+        await outputList(opts, (p) => api.listProducts(projectId, opts.package, p));
       } catch (e) {
         outputError(e);
       }

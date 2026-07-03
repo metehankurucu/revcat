@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { AppsApi } from "../../api/apps.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerAppsCommand(program: Command): void {
   const cmd = program
@@ -13,12 +14,15 @@ export function registerAppsCommand(program: Command): void {
     .command("list")
     .description("List all apps")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new AppsApi(client);
-        output(await api.list(projectId, this.opts()));
+        await outputList(opts, (p) => api.list(projectId, p));
       } catch (e) {
         outputError(e);
       }
