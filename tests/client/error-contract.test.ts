@@ -158,4 +158,23 @@ describe("R1: v2 error schema parsing", () => {
       expect(err.apiError.message.length).toBeGreaterThan(0);
     }
   });
+
+  it("should synthesize an HTTP <status> message when both body and statusText are empty", async () => {
+    // Exercises the parseErrorBody final fallback branch (no JSON, no statusText).
+    const fn = mock(
+      async () =>
+        new Response("", { status: 503, statusText: "", headers: new Headers({ "content-type": "text/plain" }) })
+    );
+    globalThis.fetch = fn as unknown as typeof globalThis.fetch;
+    const client = new RevenueCatClient({ apiKey: "sk_test", maxRetries: 0 });
+
+    try {
+      await client.request("list-projects", {});
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      const err = e as RevenueCatApiError;
+      expect(err.statusCode).toBe(503);
+      expect(err.apiError.message).toBe("HTTP 503");
+    }
+  });
 });

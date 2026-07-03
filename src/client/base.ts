@@ -5,7 +5,6 @@ import {
 import { RateLimiter } from "./rate-limiter.ts";
 import {
   BlockedOperationError,
-  RateLimitError,
   RevenueCatApiError,
   type RevenueCatApiErrorBody,
 } from "./errors.ts";
@@ -46,8 +45,6 @@ export class RevenueCatClient {
       throw new BlockedOperationError(operationId);
     }
 
-    await this.rateLimiter.acquire(operation.domain);
-
     const url = this.buildUrl(operation, pathParams, options?.query);
 
     const headers: Record<string, string> = {
@@ -58,33 +55,89 @@ export class RevenueCatClient {
       headers["Content-Type"] = "application/json";
     }
 
-    const response = await fetch(url, {
-      method: operation.method,
-      headers,
-      body: options?.body ? JSON.stringify(options.body) : undefined,
-    });
+    const body = options?.body ? JSON.stringify(options.body) : undefined;
 
-    this.updateRateLimitFromHeaders(operation.domain, response);
+    let attempt = 0;
+    // Retry loop: honors the proactive per-domain limiter on every attempt and
+    // reactively retries 429 / retryable 5xx up to maxRetries (R3).
+    while (true) {
+      await this.rateLimiter.acquire(operation.domain);
 
-    if (response.status === 429) {
-      const retryAfter = response.headers.get("Retry-After");
-      throw new RateLimitError(
-        operation.domain,
-        retryAfter ? parseInt(retryAfter, 10) : 60
-      );
+      const response = await fetch(url, { method: operation.method, headers, body });
+
+      this.updateRateLimitFromHeaders(operation.domain, response);
+
+      if (response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          return (await response.json()) as T;
+        }
+        // For non-JSON responses (e.g., invoice file download)
+        return (await response.text()) as unknown as T;
+      }
+
+      const errorBody = await this.parseErrorBody(response);
+
+      if (this.isRetryable(response.status, errorBody) && attempt < this.maxRetries) {
+        const delayMs = this.retryDelayMs(response, errorBody, attempt);
+        attempt++;
+        this.logRetryNotice({
+          attempt,
+          max_retries: this.maxRetries,
+          delay_ms: delayMs,
+          status: response.status,
+          domain: operation.domain,
+          type: errorBody.type,
+        });
+        await this.sleep(delayMs);
+        continue;
+      }
+
+      // A 429 is retryable by definition even if the body omits the flag; make the
+      // envelope say so, so the agent knows it may retry after backing off.
+      if (response.status === 429 && errorBody.retryable === undefined) {
+        errorBody.retryable = true;
+      }
+      throw new RevenueCatApiError(response.status, errorBody);
     }
+  }
 
-    if (!response.ok) {
-      throw new RevenueCatApiError(response.status, await this.parseErrorBody(response));
+  private isRetryable(status: number, body: RevenueCatApiErrorBody): boolean {
+    if (typeof body.retryable === "boolean") return body.retryable;
+    return status === 429 || (status >= 500 && status <= 599);
+  }
+
+  /**
+   * Retry delay precedence: body `backoff_ms`, then `Retry-After` header
+   * (seconds), then capped exponential backoff (500ms * 2^attempt, max 8s).
+   */
+  private retryDelayMs(
+    response: Response,
+    body: RevenueCatApiErrorBody,
+    attempt: number
+  ): number {
+    if (typeof body.backoff_ms === "number" && body.backoff_ms > 0) {
+      return body.backoff_ms;
     }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      return (await response.json()) as T;
+    const retryAfter = response.headers.get("Retry-After");
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return seconds * 1000;
+      }
     }
+    return Math.min(500 * 2 ** attempt, 8000);
+  }
 
-    // For non-JSON responses (e.g., invoice file download)
-    return (await response.text()) as unknown as T;
+  private logRetryNotice(notice: {
+    attempt: number;
+    max_retries: number;
+    delay_ms: number;
+    status: number;
+    domain: string;
+    type?: string;
+  }): void {
+    console.error(JSON.stringify({ retry: notice }));
   }
 
   /**

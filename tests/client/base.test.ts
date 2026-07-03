@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:te
 import { RevenueCatClient } from "../../src/client/base.ts";
 import {
   BlockedOperationError,
-  RateLimitError,
   RevenueCatApiError,
 } from "../../src/client/errors.ts";
 
@@ -308,35 +307,38 @@ describe("RevenueCatClient", () => {
       expect(fn.mock.calls.length).toBe(0);
     });
 
-    it("should throw RateLimitError on 429 response", async () => {
+    // After C2, a 429 is retried; with retries disabled it surfaces as the R1
+    // RevenueCatApiError envelope carrying retryable:true (see retry.test.ts for
+    // the full retry/backoff behavior).
+    it("should throw RevenueCatApiError with retryable on 429 (retries disabled)", async () => {
       mockFetch({
         status: 429,
-        body: { message: "Rate limited" },
+        body: { object: "error", type: "rate_limit_error", message: "Rate limited", retryable: true },
         headers: { "Retry-After": "30" },
       });
-      const client = new RevenueCatClient({ apiKey: "sk_test" });
+      const client = new RevenueCatClient({ apiKey: "sk_test", maxRetries: 0 });
 
       try {
         await client.request("list-projects", {});
         expect(true).toBe(false);
       } catch (e) {
-        expect(e).toBeInstanceOf(RateLimitError);
-        const err = e as RateLimitError;
-        expect(err.domain).toBe("project_configuration");
-        expect(err.retryAfterSeconds).toBe(30);
+        expect(e).toBeInstanceOf(RevenueCatApiError);
+        const err = e as RevenueCatApiError;
+        expect(err.statusCode).toBe(429);
+        expect(err.retryable).toBe(true);
       }
     });
 
-    it("should default to 60s retry when Retry-After header is missing", async () => {
+    it("should synthesize retryable:true for a bare 429 body (retries disabled)", async () => {
       mockFetch({ status: 429, body: {} });
-      const client = new RevenueCatClient({ apiKey: "sk_test" });
+      const client = new RevenueCatClient({ apiKey: "sk_test", maxRetries: 0 });
 
       try {
         await client.request("list-projects", {});
         expect(true).toBe(false);
       } catch (e) {
-        expect(e).toBeInstanceOf(RateLimitError);
-        expect((e as RateLimitError).retryAfterSeconds).toBe(60);
+        expect(e).toBeInstanceOf(RevenueCatApiError);
+        expect((e as RevenueCatApiError).retryable).toBe(true);
       }
     });
 
@@ -410,25 +412,26 @@ describe("RevenueCatClient", () => {
       ).rejects.toThrow(RevenueCatApiError);
     });
 
-    it("should throw RevenueCatApiError on 500", async () => {
+    it("should throw RevenueCatApiError on 500 (retries disabled)", async () => {
       mockFetch({
         status: 500,
-        body: { code: 7000, message: "Internal server error" },
+        body: { object: "error", type: "server_error", message: "Internal server error", retryable: false },
       });
-      const client = new RevenueCatClient({ apiKey: "sk_test" });
+      // maxRetries:0 isolates the terminal-error assertion from C2 retry behavior.
+      const client = new RevenueCatClient({ apiKey: "sk_test", maxRetries: 0 });
 
       await expect(
         client.request("list-projects", {})
       ).rejects.toThrow(RevenueCatApiError);
     });
 
-    it("should handle non-JSON error response", async () => {
+    it("should handle non-JSON error response (retries disabled)", async () => {
       mockFetch({
         status: 502,
         text: "Bad Gateway",
         contentType: "text/html",
       });
-      const client = new RevenueCatClient({ apiKey: "sk_test" });
+      const client = new RevenueCatClient({ apiKey: "sk_test", maxRetries: 0 });
 
       try {
         await client.request("list-projects", {});

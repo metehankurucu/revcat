@@ -350,7 +350,17 @@ Built-in token-bucket rate limiter per API domain:
 | `customer_information` | 480 req/min | `customers`, `subscriptions`, `purchases` commands |
 | `project_configuration` | 60 req/min | `projects`, `apps`, `offerings`, `packages`, `entitlements`, `products`, `webhooks`, `paywalls` commands |
 
-Rate limits self-correct from API response headers. If exhausted, requests wait automatically.
+Two layers keep you under the limits:
+
+1. **Proactive:** a per-domain token bucket paces outgoing requests and self-corrects its
+   remaining budget from the `RevenueCat-Rate-Limit-*` response headers.
+2. **Reactive:** if the API still returns `429` (or a retryable `5xx`), the client retries
+   automatically up to 2 times, waiting for the body's `backoff_ms`, then the `Retry-After`
+   header, then a capped exponential backoff. Each wait is announced on **stderr** as a JSON
+   line, e.g. `{"retry":{"attempt":1,"max_retries":2,"delay_ms":1000,"status":429,...}}`.
+
+If the retries are exhausted, the final error is emitted as the standard JSON envelope with
+`"retryable": true` so a caller can decide whether to try again later.
 
 ## Development
 
