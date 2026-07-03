@@ -186,6 +186,21 @@ describe("CLI: Error handling", () => {
     expect(String(parsed.message)).toContain("Project ID");
   });
 
+  // R8 + envelope routing: the missing-project-id failure flows through the
+  // shared error envelope, so --compact makes it single-line (not pretty).
+  it("should emit a single-line MissingProjectId envelope under --compact", async () => {
+    const { stderr } = await runCliWithEnv(
+      ["charts", "overview", "--compact"],
+      { REVENUECAT_API_KEY: "sk_test_key", HOME: "/tmp/nonexistent-home" }
+    );
+
+    const trimmed = stderr.trim();
+    expect(trimmed).not.toContain("\n");
+    const parsed = JSON.parse(trimmed);
+    expect(parsed.error).toBe("MissingProjectId");
+    expect(String(parsed.message)).toContain("Project ID");
+  });
+
   it("should show error when project ID missing for charts", async () => {
     const { stdout, stderr, exitCode } = await runCliWithEnv(
       ["charts", "overview"],

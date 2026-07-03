@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadConfig } from "../utils/config.ts";
 import { RevenueCatClient } from "../client/base.ts";
+import { MissingProjectIdError } from "../client/errors.ts";
 import { setCompactOutput } from "./formatter.ts";
 import { registerProjectsCommand } from "./commands/projects.cmd.ts";
 import { registerAppsCommand } from "./commands/apps.cmd.ts";
@@ -66,13 +67,10 @@ export function getProjectId(cmd: Command): string {
   const opts = cmd.optsWithGlobals();
   const projectId = opts.project || opts._projectId;
   if (!projectId) {
-    console.error(
-      JSON.stringify({
-        error: "MissingProjectId",
-        message: "Project ID required. Use --project flag or set REVENUECAT_PROJECT_ID env var.",
-      }, null, 2)
-    );
-    process.exit(1);
+    // Thrown (not printed here) so it flows through the shared outputError
+    // envelope in each command's catch block, honoring --compact like any
+    // other failure.
+    throw new MissingProjectIdError();
   }
   return projectId;
 }

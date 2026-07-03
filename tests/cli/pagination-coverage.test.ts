@@ -60,6 +60,7 @@ describe("R4: pagination flag coverage", () => {
 
   it("covers the specific top-level list/search commands from the plan", () => {
     const expected = [
+      "revcat projects list",
       "revcat customers list",
       "revcat purchases search",
       "revcat subscriptions search",

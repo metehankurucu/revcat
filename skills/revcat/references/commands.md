@@ -11,7 +11,7 @@ Pagination: every command shown below with `[--limit <n>]` also accepts `[--star
 ## projects
 
 ```bash
-revcat projects list
+revcat projects list [--limit <n>] [--starting-after <cursor>] [--all]
 ```
 
 No project ID required.

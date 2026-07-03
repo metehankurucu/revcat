@@ -96,9 +96,9 @@ Command pattern: `revcat <resource> <action> [options]`
 
 ### projects
 
-| Command | Description |
-|---------|-------------|
-| `projects list` | List all projects |
+| Command | Options | Description |
+|---------|---------|-------------|
+| `projects list` | `--limit <n>`, `--starting-after <id>`, `--all` | List all projects (no project ID required) |
 
 ### apps
 
@@ -377,7 +377,7 @@ If the retries are exhausted, the final error is emitted as the standard JSON en
 # Install dependencies
 bun install
 
-# Run tests (299 tests, 1106 assertions)
+# Run tests (303 tests, 1116 assertions)
 bun test
 
 # Type check
