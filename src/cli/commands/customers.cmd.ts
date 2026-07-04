@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { CustomersApi } from "../../api/customers.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerCustomersCommand(program: Command): void {
   const cmd = program
@@ -14,13 +15,14 @@ export function registerCustomersCommand(program: Command): void {
     .description("List customers")
     .option("--limit <n>", "Limit results", parseInt)
     .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.list(projectId, { limit: opts.limit, starting_after: opts.startingAfter }));
+        await outputList(opts, (p) => api.list(projectId, p));
       } catch (e) {
         outputError(e);
       }
@@ -45,12 +47,16 @@ export function registerCustomersCommand(program: Command): void {
     .command("entitlements")
     .description("List active entitlements for a customer")
     .requiredOption("--customer <id>", "Customer ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.listActiveEntitlements(projectId, this.opts().customer));
+        await outputList(opts, (p) => api.listActiveEntitlements(projectId, opts.customer, p));
       } catch (e) {
         outputError(e);
       }
@@ -60,12 +66,16 @@ export function registerCustomersCommand(program: Command): void {
     .command("aliases")
     .description("List aliases for a customer")
     .requiredOption("--customer <id>", "Customer ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.listAliases(projectId, this.opts().customer));
+        await outputList(opts, (p) => api.listAliases(projectId, opts.customer, p));
       } catch (e) {
         outputError(e);
       }
@@ -75,12 +85,16 @@ export function registerCustomersCommand(program: Command): void {
     .command("attributes")
     .description("List attributes for a customer")
     .requiredOption("--customer <id>", "Customer ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.listAttributes(projectId, this.opts().customer));
+        await outputList(opts, (p) => api.listAttributes(projectId, opts.customer, p));
       } catch (e) {
         outputError(e);
       }
@@ -109,13 +123,15 @@ export function registerCustomersCommand(program: Command): void {
     .description("List purchases for a customer")
     .requiredOption("--customer <id>", "Customer ID")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.listPurchases(projectId, opts.customer, { limit: opts.limit }));
+        await outputList(opts, (p) => api.listPurchases(projectId, opts.customer, p));
       } catch (e) {
         outputError(e);
       }
@@ -126,13 +142,15 @@ export function registerCustomersCommand(program: Command): void {
     .description("List subscriptions for a customer")
     .requiredOption("--customer <id>", "Customer ID")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new CustomersApi(client);
-        output(await api.listSubscriptions(projectId, opts.customer, { limit: opts.limit }));
+        await outputList(opts, (p) => api.listSubscriptions(projectId, opts.customer, p));
       } catch (e) {
         outputError(e);
       }

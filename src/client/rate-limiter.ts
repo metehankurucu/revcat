@@ -8,8 +8,12 @@ const WINDOW_MS = 60_000;
 
 export class RateLimiter {
   private domains: Map<string, DomainBucket>;
+  private sleep: (ms: number) => Promise<void>;
 
-  constructor() {
+  constructor(sleep?: (ms: number) => Promise<void>) {
+    // Injectable sleep so the limiter's own wait is deterministic in tests and
+    // consistent with the client's retry backoff (rather than a hidden setTimeout).
+    this.sleep = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     const now = Date.now();
     this.domains = new Map([
       ["charts_metrics", { maxRequests: 5, tokens: 5, lastRefill: now }],
@@ -35,7 +39,7 @@ export class RateLimiter {
     if (bucket.tokens <= 0) {
       const waitMs = WINDOW_MS - (Date.now() - bucket.lastRefill);
       if (waitMs > 0) {
-        await new Promise((r) => setTimeout(r, waitMs));
+        await this.sleep(waitMs);
       }
       this.refill(bucket);
     }

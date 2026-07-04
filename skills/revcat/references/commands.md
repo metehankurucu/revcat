@@ -2,14 +2,16 @@
 
 Complete reference for all 16 resources and their subcommands.
 
-Global options: `--api-key <key>`, `--project <id>` (or `-p <id>`)
+Global options: `--api-key <key>`, `--project <id>` (or `-p <id>`), `--compact` (single-line JSON; default pretty).
+
+Pagination: every command shown below with `[--limit <n>]` also accepts `[--starting-after <cursor>]` and `[--all]`. `--all` auto-follows the API's `next_page` cursor (capped at 20 pages, stderr warning when truncated) and returns one merged `items` array with `pages_fetched` and `truncated`.
 
 ---
 
 ## projects
 
 ```bash
-revcat projects list
+revcat projects list [--limit <n>] [--starting-after <cursor>] [--all]
 ```
 
 No project ID required.
@@ -32,11 +34,13 @@ Rate limit: **5 req/min**
 
 ```bash
 revcat charts overview --project <id> [--currency <code>]
-revcat charts data --project <id> --chart <name> [--start <date>] [--end <date>] [--resolution <r>] [--currency <code>] [--segment <s>] [--filters <json>] [--selectors <json>]
-revcat charts options --project <id> --chart <name>
+revcat charts data --project <id> --chart <name> [--start <date>] [--end <date>] [--resolution <r>] [--currency <code>] [--segment <s>] [--filters <json>] [--selectors <json>] [--unsafe-chart]
+revcat charts options --project <id> --chart <name> [--unsafe-chart]
 ```
 
-Chart names: `actives`, `arr`, `churn`, `mrr`, `mrr_movement`, `revenue`, `trials`, `subscription_retention`, `initial_conversion`, `trial_conversion`, `realized_ltv_per_customer`, `realized_ltv_per_paying_customer`, `annual_revenue_per_customer`, `refund_rate`, `new`, `active_trials_movement`, `store_top_products`, `store_top_countries`, `non_subscription_revenue`, `non_subscription_transactions`, `non_subscription_active_subscribers`
+Chart names (validated against the RevenueCat v2 spec; an unknown `--chart` is rejected before any request with a JSON `did_you_mean` suggestion, e.g. `mmr` suggests `mrr`): `actives`, `actives_movement`, `actives_new`, `arr`, `churn`, `cohort_explorer`, `conversion_to_paying`, `customers_new`, `initial_conversion`, `ltv_per_customer`, `ltv_per_paying_customer`, `mrr`, `mrr_movement`, `prediction_explorer`, `refund_rate`, `revenue`, `subscription_retention`, `subscription_status`, `trials`, `trials_movement`, `trials_new`, `customers_active`, `trial_conversion_rate`, `non-subscription_purchases`
+
+Pass `--unsafe-chart` to skip validation and send the value as-is.
 
 Resolutions: `day`, `week`, `month`, `quarter`, `year`
 

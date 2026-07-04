@@ -5,7 +5,9 @@ import type { Project } from "../types/api.ts";
 export class ProjectsApi {
   constructor(private client: RevenueCatClient) {}
 
-  async list(): Promise<PaginatedList<Project>> {
-    return this.client.request("list-projects", {});
+  async list(
+    opts?: { limit?: number; starting_after?: string }
+  ): Promise<PaginatedList<Project>> {
+    return this.client.request("list-projects", {}, { query: opts });
   }
 }

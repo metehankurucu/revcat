@@ -104,5 +104,27 @@ describe("RateLimiter", () => {
       // Now should be able to acquire again
       await limiter.acquire("charts_metrics");
     });
+
+    // C2 review P2: the exhaustion wait must go through the injectable sleep so it
+    // is deterministic in tests (and consistent with the client's retry backoff),
+    // rather than a hidden real-time setTimeout.
+    it("should route the exhaustion wait through the injected sleep", async () => {
+      const waits: number[] = [];
+      const limiter = new RateLimiter(async (ms) => {
+        waits.push(ms);
+      });
+
+      // Exhaust the 5 charts_metrics tokens.
+      for (let i = 0; i < 5; i++) {
+        await limiter.acquire("charts_metrics");
+      }
+      expect(waits.length).toBe(0);
+
+      // The 6th acquire has no tokens and must wait - via the injected sleep, instantly.
+      await limiter.acquire("charts_metrics");
+      expect(waits.length).toBe(1);
+      expect(waits[0]).toBeGreaterThan(0);
+      expect(waits[0]).toBeLessThanOrEqual(60_000);
+    });
   });
 });

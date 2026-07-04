@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { SubscriptionsApi } from "../../api/subscriptions.ts";
 import { getClient, getProjectId } from "../index.ts";
 import { output, outputError } from "../formatter.ts";
+import { outputList } from "../paginate.ts";
 
 export function registerSubscriptionsCommand(program: Command): void {
   const cmd = program
@@ -14,16 +15,17 @@ export function registerSubscriptionsCommand(program: Command): void {
     .description("Search subscriptions by store identifier")
     .option("--store-identifier <id>", "Store subscription identifier")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new SubscriptionsApi(client);
-        output(await api.search(projectId, {
-          store_subscription_identifier: opts.storeIdentifier,
-          limit: opts.limit,
-        }));
+        await outputList(opts, (p) =>
+          api.search(projectId, { ...p, store_subscription_identifier: opts.storeIdentifier })
+        );
       } catch (e) {
         outputError(e);
       }
@@ -48,12 +50,16 @@ export function registerSubscriptionsCommand(program: Command): void {
     .command("entitlements")
     .description("List entitlements for a subscription")
     .requiredOption("--subscription <id>", "Subscription ID")
+    .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
+        const opts = this.opts();
         const api = new SubscriptionsApi(client);
-        output(await api.listEntitlements(projectId, this.opts().subscription));
+        await outputList(opts, (p) => api.listEntitlements(projectId, opts.subscription, p));
       } catch (e) {
         outputError(e);
       }
@@ -64,13 +70,15 @@ export function registerSubscriptionsCommand(program: Command): void {
     .description("List transactions for a subscription")
     .requiredOption("--subscription <id>", "Subscription ID")
     .option("--limit <n>", "Limit results", parseInt)
+    .option("--starting-after <id>", "Cursor for pagination")
+    .option("--all", "Auto-follow pagination (max 20 pages)")
     .action(async function (this: Command) {
       try {
         const client = getClient(this);
         const projectId = getProjectId(this);
         const opts = this.opts();
         const api = new SubscriptionsApi(client);
-        output(await api.getTransactions(projectId, opts.subscription, { limit: opts.limit }));
+        await outputList(opts, (p) => api.getTransactions(projectId, opts.subscription, p));
       } catch (e) {
         outputError(e);
       }

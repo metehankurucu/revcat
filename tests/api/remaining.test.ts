@@ -21,6 +21,15 @@ describe("ProjectsApi", () => {
     expect(requests[0].operationId).toBe("list-projects");
     expect(requests[0].pathParams).toEqual({});
   });
+
+  it("should pass limit and starting_after as query", async () => {
+    const { client, requests } = createMockClient({ object: "list", items: [] });
+    const api = new ProjectsApi(client);
+
+    await api.list({ limit: 10, starting_after: "proj_last" });
+
+    expect(requests[0].options?.query).toEqual({ limit: 10, starting_after: "proj_last" });
+  });
 });
 
 describe("AppsApi", () => {

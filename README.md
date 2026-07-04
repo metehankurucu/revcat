@@ -76,8 +76,11 @@ revcat charts overview --project proj96d8f365
 # List customers
 revcat customers list --project proj96d8f365 --limit 10
 
-# List offerings
-revcat offerings list --project proj96d8f365
+# Fetch every page in one call (auto-follows next_page, merged into one items array)
+revcat customers list --project proj96d8f365 --all | jq '.items | length'
+
+# Single-line JSON for compact logs/pipelines
+revcat offerings list --project proj96d8f365 --compact
 
 # List products
 revcat products list --project proj96d8f365
@@ -87,11 +90,15 @@ revcat products list --project proj96d8f365
 
 Command pattern: `revcat <resource> <action> [options]`
 
+**Global options** (any command): `--api-key <key>`, `--compact` (single-line JSON; default is pretty-printed).
+
+**Pagination:** every command below that accepts `--limit` also accepts `--starting-after <cursor>` and `--all`. `--all` auto-follows the API's `next_page` cursor (hard-capped at 20 pages, with a stderr warning when the cap truncates) and prints one merged `items` array plus `pages_fetched` and `truncated` metadata. The rows list `--limit` only, to keep them readable.
+
 ### projects
 
-| Command | Description |
-|---------|-------------|
-| `projects list` | List all projects |
+| Command | Options | Description |
+|---------|---------|-------------|
+| `projects list` | `--limit <n>`, `--starting-after <id>`, `--all` | List all projects (no project ID required) |
 
 ### apps
 
@@ -108,16 +115,18 @@ Rate limit: **5 req/min**
 | Command | Options | Description |
 |---------|---------|-------------|
 | `charts overview` | `--currency <code>` | Get overview metrics (MRR, revenue, active subs, trials) |
-| `charts data` | `--chart <name>` (required), `--start <date>`, `--end <date>`, `--resolution <r>`, `--currency <code>`, `--segment <s>`, `--filters <json>`, `--selectors <json>` | Get chart data |
-| `charts options` | `--chart <name>` (required) | Get available options for a chart |
+| `charts data` | `--chart <name>` (required), `--start <date>`, `--end <date>`, `--resolution <r>`, `--currency <code>`, `--segment <s>`, `--filters <json>`, `--selectors <json>`, `--unsafe-chart` | Get chart data |
+| `charts options` | `--chart <name>` (required), `--unsafe-chart` | Get available options for a chart |
 
-Available chart names: `actives`, `arr`, `churn`, `mrr`, `mrr_movement`, `revenue`, `trials`, `subscription_retention`, `initial_conversion`, `trial_conversion`, `realized_ltv_per_customer`, `realized_ltv_per_paying_customer`, `annual_revenue_per_customer`, `refund_rate`, `new`, `active_trials_movement`, `store_top_products`, `store_top_countries`, `non_subscription_revenue`, `non_subscription_transactions`, `non_subscription_active_subscribers`
+Available chart names (validated against the RevenueCat v2 spec): `actives`, `actives_movement`, `actives_new`, `arr`, `churn`, `cohort_explorer`, `conversion_to_paying`, `customers_new`, `initial_conversion`, `ltv_per_customer`, `ltv_per_paying_customer`, `mrr`, `mrr_movement`, `prediction_explorer`, `refund_rate`, `revenue`, `subscription_retention`, `subscription_status`, `trials`, `trials_movement`, `trials_new`, `customers_active`, `trial_conversion_rate`, `non-subscription_purchases`
+
+An unknown `--chart` is rejected before any request with a JSON `did_you_mean` suggestion (e.g. `mmr` suggests `mrr`). Pass `--unsafe-chart` to skip validation and send the value as-is (useful for a newly released chart).
 
 ### customers
 
 | Command | Options | Description |
 |---------|---------|-------------|
-| `customers list` | `--limit <n>`, `--starting-after <id>` | List customers |
+| `customers list` | `--limit <n>`, `--starting-after <id>`, `--all` | List customers |
 | `customers get` | `--customer <id>` (required) | Get a customer |
 | `customers entitlements` | `--customer <id>` (required) | List active entitlements |
 | `customers aliases` | `--customer <id>` (required) | List aliases |
@@ -197,7 +206,7 @@ Available chart names: `actives`, `arr`, `churn`, `mrr`, `mrr_movement`, `revenu
 
 | Command | Options | Description |
 |---------|---------|-------------|
-| `audit-logs list` | `--limit <n>`, `--starting-after <id>` | List audit logs |
+| `audit-logs list` | `--limit <n>`, `--starting-after <id>`, `--all` | List audit logs |
 
 ### collaborators (read-only)
 
@@ -350,7 +359,17 @@ Built-in token-bucket rate limiter per API domain:
 | `customer_information` | 480 req/min | `customers`, `subscriptions`, `purchases` commands |
 | `project_configuration` | 60 req/min | `projects`, `apps`, `offerings`, `packages`, `entitlements`, `products`, `webhooks`, `paywalls` commands |
 
-Rate limits self-correct from API response headers. If exhausted, requests wait automatically.
+Two layers keep you under the limits:
+
+1. **Proactive:** a per-domain token bucket paces outgoing requests and self-corrects its
+   remaining budget from the `RevenueCat-Rate-Limit-*` response headers.
+2. **Reactive:** if the API still returns `429` (or a retryable `5xx`), the client retries
+   automatically up to 2 times, waiting for the body's `backoff_ms`, then the `Retry-After`
+   header, then a capped exponential backoff. Each wait is announced on **stderr** as a JSON
+   line, e.g. `{"retry":{"attempt":1,"max_retries":2,"delay_ms":1000,"status":429,...}}`.
+
+If the retries are exhausted, the final error is emitted as the standard JSON envelope with
+`"retryable": true` so a caller can decide whether to try again later.
 
 ## Development
 
@@ -358,7 +377,7 @@ Rate limits self-correct from API response headers. If exhausted, requests wait 
 # Install dependencies
 bun install
 
-# Run tests (188 tests, 801 assertions)
+# Run tests (303 tests, 1116 assertions)
 bun test
 
 # Type check

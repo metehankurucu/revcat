@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { loadConfig } from "../utils/config.ts";
 import { RevenueCatClient } from "../client/base.ts";
+import { MissingProjectIdError } from "../client/errors.ts";
+import { setCompactOutput } from "./formatter.ts";
 import { registerProjectsCommand } from "./commands/projects.cmd.ts";
 import { registerAppsCommand } from "./commands/apps.cmd.ts";
 import { registerChartsCommand } from "./commands/charts.cmd.ts";
@@ -24,10 +26,12 @@ export function createProgram(): Command {
   program
     .name("revcat")
     .description("RevenueCat CLI for AI agents - analytics, MRR tracking, and subscription management")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("--api-key <key>", "RevenueCat API v2 secret key")
+    .option("--compact", "Output single-line JSON instead of pretty-printed")
     .hook("preAction", (thisCommand) => {
       const opts = thisCommand.opts();
+      setCompactOutput(Boolean(opts.compact));
       const config = loadConfig({ apiKey: opts.apiKey });
       const client = new RevenueCatClient({ apiKey: config.apiKey });
       // Store on the program for subcommands to access
@@ -63,13 +67,10 @@ export function getProjectId(cmd: Command): string {
   const opts = cmd.optsWithGlobals();
   const projectId = opts.project || opts._projectId;
   if (!projectId) {
-    console.error(
-      JSON.stringify({
-        error: "MissingProjectId",
-        message: "Project ID required. Use --project flag or set REVENUECAT_PROJECT_ID env var.",
-      }, null, 2)
-    );
-    process.exit(1);
+    // Thrown (not printed here) so it flows through the shared outputError
+    // envelope in each command's catch block, honoring --compact like any
+    // other failure.
+    throw new MissingProjectIdError();
   }
   return projectId;
 }
