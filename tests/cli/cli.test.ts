@@ -47,7 +47,7 @@ describe("CLI: Basic", () => {
 
   it("should show version", async () => {
     const { stdout } = await runCli("--version");
-    expect(stdout.trim()).toBe("0.1.0");
+    expect(stdout.trim()).toBe("0.2.0");
   });
 
   it("should show charts subcommand help", async () => {

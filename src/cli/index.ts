@@ -26,7 +26,7 @@ export function createProgram(): Command {
   program
     .name("revcat")
     .description("RevenueCat CLI for AI agents - analytics, MRR tracking, and subscription management")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("--api-key <key>", "RevenueCat API v2 secret key")
     .option("--compact", "Output single-line JSON instead of pretty-printed")
     .hook("preAction", (thisCommand) => {
